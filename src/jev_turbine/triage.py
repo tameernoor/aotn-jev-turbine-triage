@@ -52,6 +52,14 @@ class TriageResult:
     reasons: list[str]
     chattering: bool
     flood: bool
+    # Step 2 (escalate.py) fields. None for an event step 1 was not uncertain
+    # about, since it was never escalated. When set, `triage`/`reasons` above
+    # already hold the step-2 result; step 1's own triage and reasons are kept
+    # here instead.
+    step1_triage: str | None = None
+    step1_reasons: list[str] | None = None
+    context: str | None = None
+    step2_judgments: dict[str, dict] | None = None
 
 
 def apply_rules(j: Judgments, status: str) -> tuple[str, list[str]]:

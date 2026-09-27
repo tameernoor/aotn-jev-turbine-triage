@@ -1,0 +1,24 @@
+# Wind turbine event questions. Jev sees only `status` and `message`, never the code
+# or the operator's own category labels. All three are sent to Jev in one request per
+# distinct (status, message) pair; see triage.py for which ones the rules actually read.
+# Keys "true" and "false" are quoted so YAML keeps them as strings.
+
+cause:
+  type: choice
+  instructions: What most likely caused this wind turbine event? Judge from `status`, `message` and `context`.
+  criteria:
+    fault: A defect or failure in the turbine itself, such as a converter, brake, gearbox, sensor or safety chain problem.
+    planned: Planned or routine activity, such as a test, maintenance on site, a manual stop by staff, a stop requested by the park controller or owner, cable unwinding or oil flushing.
+    external: Conditions outside the turbine, such as the power grid, grid frequency or voltage, or wind that is too weak, too strong or from the wrong direction.
+    running: The turbine is still producing and the event only reports a condition, such as a warm-up stage or a minor warning.
+
+safety_related:
+  type: noul
+  instructions: Does this event indicate a risk to people or to the turbine's structure, such as an emergency stop, a safety chain, overspeed or tower oscillation? Use `status`, `message` and `context`.
+
+needs_site_visit:
+  type: noul
+  instructions: Would a technician most likely have to go to the turbine to fix this? Use `status`, `message` and `context`.
+  criteria:
+    "true": The message describes worn, broken or defective equipment that cannot be reset remotely.
+    "false": The condition clears by itself, can be reset remotely, or is a planned activity.

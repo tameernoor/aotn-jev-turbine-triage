@@ -1,0 +1,261 @@
+import asyncio
+import json
+from datetime import datetime, timedelta, timezone
+
+from fakes import FakeJev, answers
+
+from jev_turbine.escalate import EscalationCache, escalate, load_cache, save_cache
+from jev_turbine.measurements import connect_in_memory
+from jev_turbine.models import Event
+from jev_turbine.triage import ACT_NOW, MONITOR, NO_ACTION, triage
+
+T0 = datetime(2016, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+# Step-1 judgments (fakes.answers shape) pre-seeded straight into the step-1 cache, so
+# triage() never needs an actual Jev call and each test controls exactly which of its
+# events step 1 leaves uncertain.
+UNCERTAIN_CAUSE = answers(
+    cause={"type": "choice", "value": "fault", "probabilities": {"fault": 0.5}, "confidence": 0.5},
+    safety_related=0.1,
+    needs_site_visit=0.1,
+)
+PLANNED = answers(cause="planned", safety_related=0.1)
+RUNNING = answers(cause="running", safety_related=0.1)
+
+
+def ev(turbine="Kelmarsh 1", start=T0, end=None, duration=None, status="Warning", code="1", message="msg", iec_category=None):
+    return Event(
+        turbine=turbine,
+        start=start,
+        end=end,
+        duration_seconds=duration,
+        status=status,
+        code=code,
+        message=message,
+        iec_category=iec_category,
+    )
+
+
+def step1(events, cache):
+    return asyncio.run(triage(events, FakeJev().ask, cache))
+
+
+class TrackingAsk:
+    """Wraps a FakeJev's ask, recording the largest number of calls ever in
+    flight at once (a small sleep forces genuine overlap under asyncio)."""
+
+    def __init__(self, fake: FakeJev, delay: float = 0.01):
+        self._fake = fake
+        self._delay = delay
+        self.current = 0
+        self.max_seen = 0
+
+    async def __call__(self, state, questions):
+        self.current += 1
+        self.max_seen = max(self.max_seen, self.current)
+        try:
+            await asyncio.sleep(self._delay)
+            return await self._fake.ask(state, questions)
+        finally:
+            self.current -= 1
+
+
+# --- selection: only step-1-uncertain events escalate ------------------------------
+
+
+def test_only_uncertain_events_escalate():
+    uncertain_event = ev(status="Stop", message="Pitch fault", start=T0)
+    long_stop_only = ev(status="Stop", message="Cable unwind", start=T0 + timedelta(hours=2), duration=25 * 3600)
+    warning_while_running = ev(status="Warning", message="Warm-up", start=T0 + timedelta(hours=4))
+    plain_informational = ev(status="Informational", message="System OK", start=T0 + timedelta(hours=6))
+    chattering_informational = [
+        ev(status="Informational", message="Substation grid failure", start=T0 + timedelta(hours=8)),
+        ev(status="Informational", message="Substation grid failure", start=T0 + timedelta(hours=8, minutes=1)),
+        ev(status="Informational", message="Substation grid failure", start=T0 + timedelta(hours=8, minutes=2)),
+    ]
+    events = [
+        uncertain_event,
+        long_stop_only,
+        warning_while_running,
+        plain_informational,
+        *chattering_informational,
+    ]
+    cache = {
+        "Stop": {"Pitch fault": UNCERTAIN_CAUSE, "Cable unwind": PLANNED},
+        "Warning": {"Warm-up": RUNNING},
+    }
+    results = step1(events, cache)
+
+    # Sanity: confirm each scenario landed where the test intends before escalating.
+    assert results[0].triage == MONITOR and results[0].reasons == ["uncertain: cause"]
+    assert results[1].triage == MONITOR and results[1].reasons == ["planned", "long stop"]
+    assert results[2].triage == MONITOR and results[2].reasons == ["warning while running"]
+    assert results[3].triage == NO_ACTION and results[3].reasons == ["informational"]
+    for r in results[4:]:
+        assert r.triage == MONITOR and r.reasons == ["chattering"]
+
+    con = connect_in_memory()
+    step2_fake = FakeJev(values=dict(cause="external", safety_related=0.1))
+    final = asyncio.run(escalate(results, events, events, con, step2_fake.ask, cache={}))
+
+    assert len(step2_fake.calls) == 1
+    assert step2_fake.calls[0]["state"]["status"] == "Stop"
+    assert step2_fake.calls[0]["state"]["message"] == "Pitch fault"
+
+    # The escalated event's final triage comes from step 2.
+    assert final[0].triage == NO_ACTION
+    assert final[0].reasons == ["external"]
+    assert final[0].step1_triage == MONITOR
+
+    # Every other event, including both informational shapes, comes back untouched.
+    for i in range(1, len(events)):
+        assert final[i] == results[i]
+        assert final[i].step1_triage is None
+
+
+# --- state carries the context ------------------------------------------------------
+
+
+def test_state_carries_the_context():
+    event = ev(status="Stop", message="Pitch fault")
+    cache = {"Stop": {"Pitch fault": UNCERTAIN_CAUSE}}
+    results = step1([event], cache)
+
+    con = connect_in_memory()
+    con.executemany(
+        "INSERT INTO measurements VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [(1, T0 - timedelta(minutes=10), 600.0, None, None, None, None)],
+    )
+    step2_fake = FakeJev(values=dict(cause="external", safety_related=0.1))
+    final = asyncio.run(escalate(results, [event], [event], con, step2_fake.ask, cache={}))
+
+    sent_context = step2_fake.calls[0]["state"]["context"]
+    assert "power 600 kW" in sent_context
+    assert set(step2_fake.calls[0]["state"]) == {"status", "message", "context"}
+    assert final[0].context == sent_context
+
+
+# --- final triage comes from step 2 --------------------------------------------------
+
+
+def test_final_triage_comes_from_step2():
+    event = ev(status="Stop", message="Pitch fault")
+    cache = {"Stop": {"Pitch fault": UNCERTAIN_CAUSE}}
+    results = step1([event], cache)
+    assert results[0].triage == MONITOR  # step 1 was uncertain, as the test intends
+
+    con = connect_in_memory()
+    step2_fake = FakeJev(values=dict(cause="fault", safety_related=0.1, needs_site_visit=0.9))
+    final = asyncio.run(escalate(results, [event], [event], con, step2_fake.ask, cache={}))
+
+    assert final[0].triage == ACT_NOW
+    assert final[0].reasons == ["fault needing a site visit"]
+
+
+# --- step-1 fields are kept alongside the step-2 result ------------------------------
+
+
+def test_step1_fields_are_kept():
+    event = ev(status="Stop", message="Pitch fault")
+    cache = {"Stop": {"Pitch fault": UNCERTAIN_CAUSE}}
+    results = step1([event], cache)
+
+    con = connect_in_memory()
+    step2_fake = FakeJev(values=dict(cause="fault", safety_related=0.1, needs_site_visit=0.9))
+    final = asyncio.run(escalate(results, [event], [event], con, step2_fake.ask, cache={}))
+
+    assert final[0].step1_triage == MONITOR
+    assert final[0].step1_reasons == ["uncertain: cause"]
+    assert final[0].turbine == event.turbine
+    assert final[0].start == event.start
+    assert final[0].status == event.status
+    assert final[0].message == event.message
+    assert final[0].step2_judgments is not None
+
+
+# --- code-check reasons from step 1 survive onto the step-2 result -------------------
+
+
+def test_long_stop_reason_and_floor_are_reapplied_to_the_step2_result():
+    event = ev(status="Stop", message="Pitch fault", duration=30 * 3600)
+    cache = {"Stop": {"Pitch fault": UNCERTAIN_CAUSE}}
+    results = step1([event], cache)
+    assert results[0].reasons == ["uncertain: cause", "long stop"]
+
+    con = connect_in_memory()
+    # Step 2 resolves the uncertainty to a confident, otherwise no_action cause.
+    step2_fake = FakeJev(values=dict(cause="planned", safety_related=0.1))
+    final = asyncio.run(escalate(results, [event], [event], con, step2_fake.ask, cache={}))
+
+    # no_action would floor to monitor on its own account of the long stop.
+    assert final[0].triage == MONITOR
+    assert final[0].reasons == ["planned", "long stop"]
+
+
+# --- cache: reused across calls, invalidated on a questions-hash mismatch ------------
+
+
+def test_cache_is_reused_no_second_ask():
+    event = ev(status="Stop", message="Pitch fault")
+    cache = {"Stop": {"Pitch fault": UNCERTAIN_CAUSE}}
+    results = step1([event], cache)
+
+    con = connect_in_memory()
+    context_cache: EscalationCache = {}
+    step2a = FakeJev(values=dict(cause="external", safety_related=0.1))
+    first = asyncio.run(escalate(results, [event], [event], con, step2a.ask, context_cache))
+    assert len(step2a.calls) == 1
+
+    # A differently configured Jev would answer differently, so an unchanged result
+    # proves the second call served the cache instead of asking again.
+    step2b = FakeJev(values=dict(cause="fault", safety_related=0.9))
+    second = asyncio.run(escalate(results, [event], [event], con, step2b.ask, context_cache))
+
+    assert step2b.calls == []
+    assert second[0].triage == first[0].triage
+    assert second[0].reasons == first[0].reasons
+
+
+def test_missing_cache_file_is_not_treated_as_ignored(tmp_path):
+    cache, ignored = load_cache(tmp_path / "does-not-exist.json")
+    assert cache == {}
+    assert ignored is False
+
+
+def test_hash_mismatch_invalidates_the_cache(tmp_path):
+    path = tmp_path / "judgments-context.json"
+    save_cache(path, {"Kelmarsh 1|2016-01-01T12:00:00+00:00": answers(cause="external", safety_related=0.1)})
+
+    cache, ignored = load_cache(path)
+    assert ignored is False
+    assert cache
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["questions_hash"] = "not-the-real-hash"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    cache2, ignored2 = load_cache(path)
+    assert ignored2 is True
+    assert cache2 == {}
+
+
+# --- concurrency never exceeds the limit ---------------------------------------------
+
+
+def test_concurrency_never_exceeds_the_limit():
+    n = 6
+    events = [
+        ev(turbine=f"Kelmarsh {i + 1}", status="Stop", message=f"Fault {i}", start=T0 + timedelta(minutes=i))
+        for i in range(n)
+    ]
+    cache = {"Stop": {e.message: UNCERTAIN_CAUSE for e in events}}
+    results = step1(events, cache)
+    assert all(r.triage == MONITOR for r in results)
+
+    con = connect_in_memory()
+    fake = FakeJev(values=dict(cause="external", safety_related=0.1))
+    tracker = TrackingAsk(fake)
+    asyncio.run(escalate(results, events, events, con, tracker, cache={}, limit=2))
+
+    assert len(fake.calls) == n
+    assert tracker.max_seen == 2
