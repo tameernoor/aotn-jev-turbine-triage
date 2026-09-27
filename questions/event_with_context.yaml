@@ -1,6 +1,7 @@
-# Wind turbine event questions. Jev sees only `status` and `message`, never the code
-# or the operator's own category labels. All three are sent to Jev in one request per
-# distinct (status, message) pair; see triage.py for which ones the rules actually read.
+# Step-2 wind turbine event questions. Jev sees `status`, `message` and `context`
+# (plain text computed in code from the turbine's 10-minute data and the event log),
+# never the code or the operator's own category labels. All three are sent to Jev in
+# one request per escalated event; see triage.py for which ones the rules actually read.
 # Keys "true" and "false" are quoted so YAML keeps them as strings.
 
 cause:

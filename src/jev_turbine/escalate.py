@@ -1,25 +1,10 @@
 """Step 2: re-ask Jev with SCADA context for events step 1 left uncertain.
 
-Selects the events whose step-1 triage is `monitor` with an "uncertain: ..."
-reason (see triage.apply_rules); never an informational, chattering-only,
-long-stop-only or warning-while-running event, since none of those ever
-carries that reason. Builds every selected event's context in one
+Selects events step 1 left uncertain, builds their context in one
 context.build_contexts call, asks Jev again with the step-2 questions
-(questions/event_with_context.yaml) with up to `limit` requests in flight at
-once, then re-applies triage.apply_rules to the step-2 judgments. The event's
-final triage is the step-2 result; step 1's own triage and reasons are kept on
-the result (step1_triage, step1_reasons), the rendered context is kept too,
-and the code-check reasons baked into step 1's reasons (chattering, long stop)
-are reapplied to the step-2 reasons, the same way triage() applies them to
-step 1's. `flood` and `chattering` are plain fields on TriageResult, carried
-over unchanged.
-
-The step-2 cache (EscalationCache) is keyed per event, not per (status,
-message) pair like step 1's: the context is specific to one event's own
-10-minute data, not shared across events with the same message.
-load_cache/save_cache persist it with a hash of
-questions/event_with_context.yaml, the same guard __main__.py uses for the
-step-1 judgments.json cache; Task 3's CLI wires them in.
+(questions/event_with_context.yaml) and re-applies triage.apply_rules to the
+answers. See escalate()'s own docstring for the full contract, and
+EscalationCache below for how answers are keyed and persisted.
 """
 
 from __future__ import annotations
@@ -41,16 +26,25 @@ from .triage import MONITOR, NO_ACTION, TriageResult, apply_rules, load_question
 
 QUESTIONS_PATH = Path(__file__).resolve().parents[2] / "questions" / "event_with_context.yaml"
 
-# cache[f"{turbine}|{start.isoformat()}"] holds the raw judgments dict Jev
-# returned for that event's step-2 questions (the same shape as
-# JevResult.judgments): one entry per event actually escalated and asked. Pass
-# a dict in (even {}) to have it filled in place, so it can be persisted and
-# reused without asking Jev again for that event.
+# cache[key] holds the raw judgments dict Jev returned for that key's state (the
+# same shape as JevResult.judgments). `key` is sha256 of the exact state sent to
+# Jev (see _cache_key/_state), not turbine|start: two events on the same turbine
+# starting at the same instant are common in the real data and are different
+# questions whenever their message differs, and a context.py change changes the
+# state (hence the key) too, so it can never serve a stale answer. Two events
+# that truly send Jev the same status/message/context legitimately share one
+# answer. Pass a dict in (even {}) to have it filled in place, so it can be
+# persisted and reused without asking Jev again for the same state.
 EscalationCache = dict[str, dict[str, dict]]
 
 
-def _cache_key(event: Event) -> str:
-    return f"{event.turbine}|{event.start.isoformat()}"
+def _state(event: Event, context: str) -> dict:
+    return {"status": event.status, "message": event.message, "context": context}
+
+
+def _cache_key(state: dict) -> str:
+    payload = json.dumps(state, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _needs_escalation(result: TriageResult) -> bool:
@@ -62,19 +56,18 @@ def _needs_escalation(result: TriageResult) -> bool:
 
 
 async def _ask_one(
-    event: Event,
-    context: str,
+    state: dict,
     ask: AskFn,
     questions: dict[str, dict],
     cache: EscalationCache,
     semaphore: asyncio.Semaphore,
 ) -> dict[str, dict]:
-    key = _cache_key(event)
+    key = _cache_key(state)
     cached = cache.get(key)
     if cached is not None:
         return cached
     async with semaphore:
-        result = await ask({"status": event.status, "message": event.message, "context": context}, questions)
+        result = await ask(state, questions)
     cache[key] = result.judgments
     return result.judgments
 
@@ -86,7 +79,7 @@ def _reapply_code_checks(step1_result: TriageResult, triage_class: str, reasons:
     a long stop also floors no_action up to monitor before adding its own."""
     if step1_result.chattering:
         reasons = [*reasons, "chattering"]
-    if "long stop" in step1_result.reasons:
+    if "long stop" in step1_result.reasons:  # the exact string triage()'s is_long_stop branch appends
         if triage_class == NO_ACTION:
             triage_class = MONITOR
         reasons = [*reasons, "long stop"]
@@ -116,9 +109,10 @@ async def escalate(
     event's entry is its step-2 result (triage and reasons from step 2,
     step1_triage/step1_reasons/context/step2_judgments filled in); every other
     event is returned unchanged. `cache`, if given (even {}), is filled in
-    place with every step-2 judgment actually asked, keyed per event, so a
-    later call does not ask Jev again for the same event. `limit` bounds how
-    many Jev requests are in flight at once.
+    place with every step-2 judgment actually asked, keyed by the exact state
+    sent to Jev (see EscalationCache), so a later call does not ask Jev again
+    for the same status/message/context. `limit` bounds how many Jev requests
+    are in flight at once.
     """
     if cache is None:
         cache = {}
@@ -131,13 +125,11 @@ async def escalate(
 
     escalated_events = [event for _, event in to_escalate]
     contexts = build_contexts(escalated_events, con, all_events)
+    states = [_state(event, context) for event, context in zip(escalated_events, contexts)]
 
     semaphore = asyncio.Semaphore(limit)
     raw_judgments_list = await asyncio.gather(
-        *(
-            _ask_one(event, context, ask, questions, cache, semaphore)
-            for event, context in zip(escalated_events, contexts)
-        )
+        *(_ask_one(state, ask, questions, cache, semaphore) for state in states)
     )
 
     for (i, event), context, raw in zip(to_escalate, contexts, raw_judgments_list):

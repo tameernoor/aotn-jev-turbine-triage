@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -192,6 +193,90 @@ def test_long_stop_reason_and_floor_are_reapplied_to_the_step2_result():
     assert final[0].reasons == ["planned", "long stop"]
 
 
+# --- step-2 result shapes: still uncertain, chattering kept, flood kept -------------
+
+
+def test_step2_still_uncertain_stays_monitor_with_the_step2_reason():
+    event = ev(status="Stop", message="Pitch fault")
+    cache = {"Stop": {"Pitch fault": UNCERTAIN_CAUSE}}
+    results = step1([event], cache)
+
+    con = connect_in_memory()
+    # Step 2's own answer is uncertain too (a different question, needs_site_visit,
+    # this time), so the event stays monitor with step 2's own "uncertain: ..." reason.
+    step2_fake = FakeJev(
+        values=dict(
+            cause="fault",
+            safety_related=0.1,
+            needs_site_visit=0.5,
+        )
+    )
+    final = asyncio.run(escalate(results, [event], [event], con, step2_fake.ask, cache={}))
+
+    assert final[0].triage == MONITOR
+    assert final[0].reasons == ["uncertain: needs_site_visit"]
+    assert final[0].step1_reasons == ["uncertain: cause"]
+
+
+def test_chattering_and_uncertain_event_keeps_the_chattering_reason_after_step2():
+    events = [ev(status="Stop", message="Yaw error", start=T0 + timedelta(minutes=i)) for i in range(3)]
+    cache = {"Stop": {"Yaw error": UNCERTAIN_CAUSE}}
+    results = step1(events, cache)
+    assert all(r.chattering for r in results)
+    assert all(r.reasons == ["uncertain: cause", "chattering"] for r in results)
+
+    con = connect_in_memory()
+    step2_fake = FakeJev(values=dict(cause="external", safety_related=0.1))
+    final = asyncio.run(escalate(results, events, events, con, step2_fake.ask, cache={}))
+
+    for r in final:
+        assert r.triage == NO_ACTION
+        assert r.reasons == ["external", "chattering"]
+
+
+def test_flood_flag_is_carried_over_to_the_step2_result():
+    events = [ev(status="Warning", message=f"m{i}", start=T0 + timedelta(seconds=i)) for i in range(11)]
+    cache = {"Warning": {f"m{i}": PLANNED for i in range(11)}}
+    cache["Warning"]["m0"] = UNCERTAIN_CAUSE
+    results = step1(events, cache)
+    assert results[0].flood is True
+    assert results[0].triage == MONITOR and results[0].reasons == ["uncertain: cause"]
+
+    con = connect_in_memory()
+    step2_fake = FakeJev(values=dict(cause="fault", safety_related=0.1, needs_site_visit=0.9))
+    final = asyncio.run(escalate(results, events, events, con, step2_fake.ask, cache={}))
+
+    assert final[0].flood is True
+    assert final[0].triage == ACT_NOW
+
+
+def test_default_limit_is_20():
+    assert inspect.signature(escalate).parameters["limit"].default == 20
+
+
+# --- code/iec_category never reach the state or the context --------------------------
+
+
+def test_event_code_and_iec_category_never_reach_the_state_or_context():
+    sentinel_code = "SENTINEL-CODE-DO-NOT-LEAK"
+    sentinel_iec = "SENTINEL-IEC-DO-NOT-LEAK"
+    event = ev(status="Stop", message="Pitch fault", code=sentinel_code, iec_category=sentinel_iec)
+    cache = {"Stop": {"Pitch fault": UNCERTAIN_CAUSE}}
+    results = step1([event], cache)
+
+    con = connect_in_memory()
+    step2_fake = FakeJev(values=dict(cause="external", safety_related=0.1))
+    final = asyncio.run(escalate(results, [event], [event], con, step2_fake.ask, cache={}))
+
+    state = step2_fake.calls[0]["state"]
+    assert set(state) == {"status", "message", "context"}
+    serialised_state = json.dumps(state)
+    assert sentinel_code not in serialised_state
+    assert sentinel_iec not in serialised_state
+    assert sentinel_code not in final[0].context
+    assert sentinel_iec not in final[0].context
+
+
 # --- cache: reused across calls, invalidated on a questions-hash mismatch ------------
 
 
@@ -214,6 +299,39 @@ def test_cache_is_reused_no_second_ask():
     assert step2b.calls == []
     assert second[0].triage == first[0].triage
     assert second[0].reasons == first[0].reasons
+
+
+def test_events_sharing_turbine_and_start_get_distinct_answers_after_a_round_trip(tmp_path):
+    # Real Kelmarsh data has many turbine+start collisions (different messages, same
+    # instant): the cache must key on the whole state sent to Jev, not turbine|start.
+    shared_start = T0
+    event_a = ev(status="Stop", message="Pitch fault", start=shared_start)
+    event_b = ev(status="Stop", message="Yaw fault", start=shared_start)
+    events = [event_a, event_b]
+    cache = {"Stop": {"Pitch fault": UNCERTAIN_CAUSE, "Yaw fault": UNCERTAIN_CAUSE}}
+    results = step1(events, cache)
+
+    con = connect_in_memory()
+    context_cache: EscalationCache = {}
+    step2a = FakeJev(values=dict(cause="external", safety_related=0.1))
+    first = asyncio.run(escalate(results, events, events, con, step2a.ask, context_cache))
+
+    assert len(step2a.calls) == 2
+    assert {call["state"]["message"] for call in step2a.calls} == {"Pitch fault", "Yaw fault"}
+
+    path = tmp_path / "judgments-context.json"
+    save_cache(path, context_cache)
+    loaded_cache, ignored = load_cache(path)
+    assert ignored is False
+
+    # A differently configured Jev would answer differently, so zero calls and an
+    # unchanged result on this cache-seeded run prove both answers were served.
+    step2b = FakeJev(values=dict(cause="fault", safety_related=0.9, needs_site_visit=0.9))
+    second = asyncio.run(escalate(results, events, events, con, step2b.ask, loaded_cache))
+
+    assert step2b.calls == []
+    assert [r.triage for r in second] == [r.triage for r in first]
+    assert [r.reasons for r in second] == [r.reasons for r in first]
 
 
 def test_missing_cache_file_is_not_treated_as_ignored(tmp_path):
