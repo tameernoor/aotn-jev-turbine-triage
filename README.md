@@ -111,11 +111,23 @@ where output is written (default `out/`). Each run writes:
 Jev itself is only ever built the first time a question is actually asked, in either
 step, so a run whose caches already cover everything needs no `TYPESAFE_API_KEY` and
 makes no call at all. One client is shared between step 1 and step 2 and closed once,
-after both are done. To reproduce `## Measured` below without calling Jev, point
-`--cache FILE` and `--context-cache FILE` at the committed answers (each seeds the run
-from that file instead of the matching `out/` file, without ever writing back to it;
-the merged result still lands in `out/judgments.json` / `out/judgments-context.json`
-as usual):
+after both are done. `--cache FILE` and `--context-cache FILE` seed the run from
+committed answers (each seeds the run from that file instead of the matching `out/`
+file, without ever writing back to it; the merged result still lands in
+`out/judgments.json` / `out/judgments-context.json` as usual), but a `FILE` that does
+not exist is not an error: it is treated as an empty starting cache, so a `--cache`
+without a matching `--context-cache` (or `--no-context`) still runs step 2 for real,
+against Jev, paying for every escalated call.
+
+To reproduce `## Measured` (step 1 only) without calling Jev:
+
+```
+uv run --env-file .env python -m jev_turbine run \
+  --cache results/judgments-2016.json --no-context
+```
+
+Once `results/judgments-context-2016.json` also exists (see `## Measured: step 2`),
+this reproduces both steps without calling Jev at all:
 
 ```
 uv run --env-file .env python -m jev_turbine run \
@@ -170,15 +182,18 @@ context added, computed by code from the turbine's own 10-minute measurements an
 event history, rather than left for Jev to guess at from three or four words of alarm
 text.
 
-The numbers in that paragraph, mean power and wind before the event, mean power and
-rotor speed after it, how long power stayed below 50 kW, grid frequency and voltage
-around the event, and a few counts from the event log, come from one SQL query,
-`src/jev_turbine/sql/context.sql`, run once over the whole batch of events being
-escalated rather than once per event. A reader can check the arithmetic directly
-there instead of trusting a description of it. Everything is rounded before it
-reaches Jev, power to 10 kW, wind to 0.1 m/s, frequency to 0.01 Hz, voltage to 1 V,
-durations to the nearest 10 minutes. Missing data is said, not guessed, for example
-"No 10-minute data around this event."
+The measurement numbers in that paragraph, mean power and wind before the event, mean
+power and rotor speed after it, how long power stayed below 50 kW, and grid frequency
+and voltage around the event, come from one SQL query, `src/jev_turbine/sql/context.sql`,
+run once over the whole batch of events being escalated rather than once per event. A
+reader can check the arithmetic directly there instead of trusting a description of
+it. The few counts alongside them, how many times the same message started on this
+turbine in the previous 7 days, what non-informational event happened just before it,
+whether another turbine also stopped in the same 10 minutes, come from plain Python
+instead (`_history_lines` in `context.py`), reading the in-memory event list rather
+than the database. Everything is rounded before it reaches Jev, power to 10 kW, wind
+to 0.1 m/s, frequency to 0.01 Hz, voltage to 1 V, durations to the nearest 10 minutes.
+Missing data is said, not guessed, for example "No 10-minute data around this event."
 
 A real example, Kelmarsh 1, a Stop with the message "Frequency converter error",
 2016-01-24 16:51:17:
@@ -193,11 +208,13 @@ Other turbines stopped in the same 10 minutes: no.
 
 `questions/event_with_context.yaml` asks the same three questions as step 1, word for
 word, with `status`, `message` and now this `context` text as the basis for each
-answer. A confident, different read from step 2 replaces step 1's triage for that
-event; step 1's own triage and reasons are kept alongside it (`step1_triage`,
-`step1_reasons` in `out/triage.jsonl`) rather than discarded. If step 2 is itself
-uncertain, the event stays at monitor with step 2's own uncertain reason instead of
-step 1's.
+answer. Every escalated event's final triage is step 2's, whatever that turns out to
+be, not only when it is confident or different from step 1's; step 1's own triage and
+reasons are kept alongside it (`step1_triage`, `step1_reasons` in `out/triage.jsonl`)
+rather than discarded. If step 2 is itself uncertain, the event stays at monitor with
+step 2's own uncertain reason instead of step 1's. Two escalated events whose
+`status`, `message` and rendered `context` are all identical share one answer instead
+of asking Jev twice.
 
 Only five 10-minute columns ever reach the context builder, `Power (kW)`, `Wind speed
 (m/s)`, `Rotor speed (RPM)`, `Grid frequency (Hz)` and `Grid voltage (V)`, physical
@@ -276,7 +293,8 @@ One run against `jev-1.13.0` over all of 2016 for the six turbines, with an empt
 cache. The question wording was committed before any run and not changed after it.
 The answers from this run are in `results/judgments-2016.json` and the usage in
 `results/summary-2016.json`, so the numbers below can be reproduced without calling
-Jev.
+Jev, with `--cache results/judgments-2016.json --no-context` (see "How to fetch and
+run" above; step 2 runs by default, so `--no-context` is what keeps this call-free).
 
 ### Speed and cost
 

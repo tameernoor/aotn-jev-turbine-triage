@@ -357,7 +357,7 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     run_parser = subparsers.add_parser("run", help="Load events, ask Jev, triage and evaluate.")
-    run_parser.add_argument("--data", metavar="DIR", default=None, help=f"folder of Status CSVs (default: {DEFAULT_DATA_DIR})")
+    run_parser.add_argument("--data", metavar="DIR", default=None, help=f"folder of Status CSVs (default: {DEFAULT_DATA_DIR}); step 2's context still comes from data/raw/kelmarsh.duckdb unless --sample")
     run_parser.add_argument("--out", metavar="DIR", default=None, help=f"output folder (default: {DEFAULT_OUT_DIR})")
     run_parser.add_argument("--sample", action="store_true", help="use the committed data/sample/ folder instead of --data, and its 10-minute slices instead of data/raw/kelmarsh.duckdb")
     run_parser.add_argument("--cache", metavar="FILE", default=None, help="seed the step-1 judgments cache from FILE instead of out/judgments.json")

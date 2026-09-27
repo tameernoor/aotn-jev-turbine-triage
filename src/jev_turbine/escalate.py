@@ -114,7 +114,9 @@ async def escalate(
     for the same status/message/context. Two escalated events that render the
     same state within a single call are also only asked once each, not once
     per event (see the dedupe below `contexts` above). `limit` bounds how many
-    Jev requests are in flight at once.
+    Jev requests are in flight at once. If one ask raises, every other ask this
+    call started is still awaited to completion first, so `cache` holds every
+    answer that was ever going to arrive before the exception is re-raised.
     """
     if cache is None:
         cache = {}
@@ -142,10 +144,20 @@ async def escalate(
 
     semaphore = asyncio.Semaphore(limit)
     unique_keys = list(unique_states)
-    unique_raw = await asyncio.gather(
-        *(_ask_one(unique_states[key], ask, questions, cache, semaphore) for key in unique_keys)
+    # return_exceptions=True: wait for every in-flight ask to settle before raising
+    # anything, so `cache` (already updated in place by each successful _ask_one)
+    # holds every answer that was ever going to arrive. Without it, gather raises
+    # the first exception immediately and leaves the rest running unawaited in the
+    # background; a caller's `finally` right after this call would then save
+    # whatever `cache` holds at that instant and lose every answer still in flight.
+    settled = await asyncio.gather(
+        *(_ask_one(unique_states[key], ask, questions, cache, semaphore) for key in unique_keys),
+        return_exceptions=True,
     )
-    raw_by_key = dict(zip(unique_keys, unique_raw))
+    first_exception = next((r for r in settled if isinstance(r, BaseException)), None)
+    if first_exception is not None:
+        raise first_exception
+    raw_by_key = dict(zip(unique_keys, settled))
     raw_judgments_list = [raw_by_key[key] for key in keys]
 
     for (i, event), context, raw in zip(to_escalate, contexts, raw_judgments_list):

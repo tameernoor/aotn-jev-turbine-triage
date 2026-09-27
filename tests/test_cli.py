@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import json
 from pathlib import Path
@@ -13,26 +14,36 @@ from jev_turbine.triage import QUESTIONS_PATH
 SAMPLE_DIR = Path(__file__).resolve().parent.parent / "data" / "sample"
 
 
-class RaisingAfterNAsk:
-    """Like TwoPhaseFakeJev, but the step-2 phase raises from the (raise_after+1)th
-    attempt onward. Execution order for escalate()'s asyncio.gather over distinct
-    states is deterministic here (no real awaits inside step2.ask, so each task runs
-    to completion before the next starts), so `raise_after=1` reliably means: one
-    state is answered and cached, then the next raises."""
+class SlowRaisingAsk:
+    """Like TwoPhaseFakeJev, but step 2 awaits a real asyncio.sleep before answering
+    or raising, so many concurrent asks genuinely interleave (a synchronous fake
+    would hide the bug this is meant to catch: escalate() used to gather without
+    return_exceptions, so one raise propagated immediately and left every other
+    still-sleeping ask's eventual answer unsaved). The first distinct step-2 state
+    dispatched (attempts are counted synchronously, before any await, so this is
+    deterministic) raises after a short sleep; every other one succeeds after a
+    longer sleep, so it is still outstanding at the moment the first one raises."""
 
-    def __init__(self, step1_values: dict, step2_values: dict, raise_after: int):
+    def __init__(self, step1_values: dict, step2_values: dict, raise_delay: float = 0.001, normal_delay: float = 0.05):
         self.step1 = FakeJev(values=step1_values)
         self.step2 = FakeJev(values=step2_values)
-        self._raise_after = raise_after
+        self._raise_delay = raise_delay
+        self._normal_delay = normal_delay
+        self._raise_attempt: int | None = None
         self.step2_attempts = 0
 
     async def __call__(self, state, questions):
-        if "context" in state:
-            self.step2_attempts += 1
-            if self.step2_attempts > self._raise_after:
-                raise RuntimeError("simulated step-2 failure")
-            return await self.step2.ask(state, questions)
-        return await self.step1.ask(state, questions)
+        if "context" not in state:
+            return await self.step1.ask(state, questions)
+        self.step2_attempts += 1
+        attempt = self.step2_attempts
+        if self._raise_attempt is None:
+            self._raise_attempt = attempt
+        if attempt == self._raise_attempt:
+            await asyncio.sleep(self._raise_delay)
+            raise RuntimeError("simulated step-2 failure")
+        await asyncio.sleep(self._normal_delay)
+        return await self.step2.ask(state, questions)
 
 
 class TwoPhaseFakeJev:
@@ -349,10 +360,9 @@ def test_no_context_flag_skips_step2_entirely(tmp_path):
 
 def test_step2_cache_is_saved_even_when_one_ask_raises(tmp_path):
     out_dir = tmp_path / "out"
-    ask = RaisingAfterNAsk(
+    ask = SlowRaisingAsk(
         step1_values=dict(cause="fault", safety_related=0.5, needs_site_visit=0.1),
         step2_values=dict(cause="planned", safety_related=0.1),
-        raise_after=1,
     )
 
     with pytest.raises(RuntimeError):
@@ -365,7 +375,14 @@ def test_step2_cache_is_saved_even_when_one_ask_raises(tmp_path):
     assert context_cache_path.exists()
     payload = json.loads(context_cache_path.read_text(encoding="utf-8"))
     assert payload["questions_hash"] == escalate.questions_hash()
-    assert len(payload["cache"]) == 1  # the one answer received before the raise
+
+    # More than one distinct state was actually in flight together (otherwise this
+    # test would not be exercising concurrency at all), exactly one of them raised,
+    # and every other one, still sleeping at the moment it raised, still made it
+    # into the saved file: nothing already answered, or already in flight, is lost.
+    assert ask.step2_attempts > 1
+    assert len(ask.step2.calls) == ask.step2_attempts - 1
+    assert len(payload["cache"]) == len(ask.step2.calls)
 
     # Step-2 failures otherwise stay fail-loud: no triage.jsonl/evaluation.json/
     # summary.json from an incomplete run.
