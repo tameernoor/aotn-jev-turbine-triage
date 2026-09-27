@@ -1,8 +1,7 @@
 """Triage the event stream: Jev answers five literal yes/no questions per distinct
 (status, message) pair (questions/event.yaml); code derives `cause` from three of them
 and decides act_now / monitor / no_action from all five plus the code checks in
-checks.py. See docs/plan-v3-literal.md's "Cause, derived in code" and "Triage rules
-(step 1)" sections.
+checks.py. The README's "Rules" section states the same rules in prose.
 
 Step 2 (escalate.py) no longer asks Jev again: it reads the turbine's own production
 numbers for events this file left monitor with an unclear cause, and turns them into

@@ -16,11 +16,11 @@ T0 = datetime(2016, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 # Step-1 judgments (fakes.answers shape), in questions/event.yaml's five ids, pre-seeded
 # straight into the step-1 cache, so triage() never needs an actual Jev call and each
 # test controls exactly which of its events step 1 leaves uncertain. Step 1's own rules
-# live in triage.py (Task 1); this file only exercises step 2 (escalate.py, now a
+# live in triage.py; this file only exercises step 2 (escalate.py, now a
 # code-only read of production numbers, no Jev call at all).
 
-# cause unclear via an uncertain cause-chain read (names_routine): the "in practice"
-# case decision 1 describes, and the one most of these tests use.
+# cause unclear via an uncertain cause-chain read (names_routine): the usual
+# case, and the one most of these tests use.
 CAUSE_UNCLEAR_VIA_UNCERTAIN_ROUTINE = answers(names_safety_hazard=0.1, names_physical_damage=0.1, names_routine=0.5)
 # cause unclear via three confident no's (status not Warning): nothing read was itself
 # uncertain, so step 1's reason is a plain "cause unclear", not "uncertain: ...".

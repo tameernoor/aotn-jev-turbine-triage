@@ -331,22 +331,24 @@ Over the 959 events with an IEC category:
 |---|---|---|---|
 | Five literal questions (step 1) | 663 (69 %) | 253 | 43 |
 | Plus the production rules (step 2) | 697 (73 %) | 211 | 51 |
-| Previous version, three broad questions | 717 (75 %) | 120 unsure | 122 |
+| Previous version, three broad questions | 717 (75 %) | 120 unsure and wrong | 122 |
 
 "Confidently wrong" means a cause the code acted on that does not match the
-operator's category. In the previous version, "unsure" means a `cause` answer below
-0.6 confidence.
+operator's category. In the previous version, "unsure and wrong" means a `cause` answer
+below 0.6 confidence that also does not match; 28 more answers were unsure but right,
+and sit inside the 717.
 
 - The literal questions are wrong with confidence far less often (43 events against
   122) and say "unclear" far more often (253 against 120). Headline agreement drops
   from 75 % to 69 %.
 - Where a message uses the words a question looks for, the answer is clear. The three
-  "Overload generator fan" warnings (117 events), which the previous version called
-  `running`, now come out as `fault`, matching the operator.
+  "Overload generator fan" warnings (118 events), which the previous version called
+  `running` with low confidence, now come out as a confident `fault`, matching the
+  operator.
 - Where it does not, Jev hesitates, and it hesitates on exactly the question a reader
-  would. "Cable autounwind" (68 events) came back near 0.5 on both "is this a routine
-  procedure?" and "does this name a turbine problem?". "Frequency converter not
-  ready", "Safety chain open" and the tower oscillation messages came back uncertain on
+  would. "Cable autounwind" (68 events) came back at 0.5 on "is this a routine
+  procedure?", so the cause stops there as unclear. "Frequency converter not
+  ready", "Safety chain open" and the three "Tower oscillation ... level" messages came back uncertain on
   "does this name an error, fault or failure?", because the words are not there.
 - One uncertain answer on the cause questions makes the cause unclear. That is a rule
   in code, and it is strict on purpose: it sends the event to a person instead of
@@ -366,7 +368,7 @@ power data after the event, and 67 produced in the hour after but had dipped bel
 
 act_now 181, monitor 817, no action 13,021. Before step 2, monitor was 926 and no
 action 12,912. "Brake accumulator defect" (96 events) is most of act_now, because
-`names_physical_damage` answers yes to "defect". The operator left most of those
+`names_physical_damage` answers yes to "defect". The operator left all 96
 without a category, so this data cannot say whether they deserved it.
 
 What this shows: splitting one broad question into literal ones, as TypeSafe
@@ -380,7 +382,7 @@ that is arguably the better trade. The cost is a bigger pile for people to look 
 An earlier version of this project asked three broader questions instead of these
 five (`cause`, a hidden four-way choice; `safety_related`; `needs_site_visit`, a
 forecast). Against the same 959 events with an IEC category, that version agreed with
-the operator on 717 of 959 (75%), and on 808 of 959 (84%) once Jev was re-asked a
+the operator on 717 of 959 (75 %), and on 808 of 959 (84 %) once Jev was re-asked a
 second time with a paragraph of SCADA context. That work is at commit `d082b30`.
 
 We have already seen which messages scored wrong under those broader questions. The

@@ -35,7 +35,7 @@ class AskFn(Protocol):
 def _judgment(answer) -> dict[str, Any]:
     if answer.type == "noul":
         return {"type": "noul", "value": answer.noul}
-    # "choice" is the only other type event.yaml uses.
+    # Any other type is a choice.
     return {
         "type": "choice",
         "value": answer.choice,
