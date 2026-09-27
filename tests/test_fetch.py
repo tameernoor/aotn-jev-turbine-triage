@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from jev_turbine import fetch as fetch_module
+from jev_turbine import measurements
 from jev_turbine.fetch import fetch_kelmarsh
 
 STATUS_NAMES = [f"Status_Kelmarsh_{n}_2016.csv" for n in range(1, 7)]
@@ -18,10 +19,24 @@ def _make_source_csvs(dir_path: Path) -> None:
         (dir_path / name).write_text(f"# Turbine: {name}\ndata\n", encoding="utf-8")
 
 
+def _turbine_data_csv_text(turbine_number: int) -> str:
+    """A minimal but real-shaped Turbine_Data CSV: a proper '# Turbine:' line and
+    '# Date and time,...' header (so jev_turbine.measurements can actually load
+    it into DuckDB), one known row and one all-NaN row."""
+    return (
+        f"# Turbine: Kelmarsh {turbine_number}\n"
+        "# Time zone: UTC\n"
+        "#\n"
+        "# Date and time,Power (kW),Wind speed (m/s),Rotor speed (RPM),Grid frequency (Hz),Grid voltage (V)\n"
+        "2016-01-03 00:00:00,100.0,5.0,10.0,50.0,690.0\n"
+        "2016-01-03 00:10:00,NaN,NaN,NaN,NaN,NaN\n"
+    )
+
+
 def _make_source_turbine_data_csvs(dir_path: Path) -> None:
     dir_path.mkdir(parents=True, exist_ok=True)
-    for name in TURBINE_DATA_NAMES:
-        (dir_path / name).write_text(f"# Turbine: {name}\ndata\n", encoding="utf-8")
+    for n, name in zip(range(1, 7), TURBINE_DATA_NAMES):
+        (dir_path / name).write_text(_turbine_data_csv_text(n), encoding="utf-8")
 
 
 def test_copies_from_local_directory_when_csvs_are_present(tmp_path):
@@ -210,15 +225,15 @@ def test_turbine_data_csvs_are_extracted_from_a_local_zip_alongside_status(tmp_p
     with zipfile.ZipFile(zip_path, "w") as zf:
         for name in STATUS_NAMES:
             zf.writestr(name, f"# Turbine: {name}\ndata\n")
-        for name in TURBINE_DATA_NAMES:
-            zf.writestr(name, f"# Turbine: {name}\n10-minute data\n")
+        for n, name in zip(range(1, 7), TURBINE_DATA_NAMES):
+            zf.writestr(name, _turbine_data_csv_text(n))
         zf.writestr("Metmast_Kelmarsh_2016.csv", "not a status or turbine data file\n")
 
     raw = tmp_path / "raw"
     fetch_kelmarsh(raw, local_dirs=[source])
 
-    for name in TURBINE_DATA_NAMES:
-        assert (raw / name).read_text(encoding="utf-8") == f"# Turbine: {name}\n10-minute data\n"
+    for n, name in zip(range(1, 7), TURBINE_DATA_NAMES):
+        assert (raw / name).read_text(encoding="utf-8") == _turbine_data_csv_text(n)
     assert not (raw / "Metmast_Kelmarsh_2016.csv").exists()
 
 
@@ -229,8 +244,8 @@ def test_turbine_data_is_extracted_from_the_zip_already_downloaded_for_status(tm
     with zipfile.ZipFile(zip_path, "w") as zf:
         for name in STATUS_NAMES:
             zf.writestr(name, f"# Turbine: {name}\ndata\n")
-        for name in TURBINE_DATA_NAMES:
-            zf.writestr(name, f"# Turbine: {name}\n10-minute data\n")
+        for n, name in zip(range(1, 7), TURBINE_DATA_NAMES):
+            zf.writestr(name, _turbine_data_csv_text(n))
 
     def boom(*args, **kwargs):
         raise AssertionError("should not touch the network: a zip is already in raw_dir")
@@ -260,3 +275,60 @@ def test_turbine_data_fetch_is_a_noop_when_raw_dir_already_has_all_six(tmp_path,
     fetch_kelmarsh(raw, local_dirs=[tmp_path / "does-not-exist"])
 
     assert len(list(raw.glob("Turbine_Data_Kelmarsh_*.csv"))) == 6
+
+
+# --- DuckDB build -------------------------------------------------------------------
+
+
+def test_fetch_builds_the_duckdb_database_from_the_turbine_data_csvs(tmp_path):
+    source = tmp_path / "source"
+    _make_source_csvs(source)
+    _make_source_turbine_data_csvs(source)
+    raw = tmp_path / "raw"
+
+    fetch_kelmarsh(raw, local_dirs=[source])
+
+    db_path = raw / measurements.DB_FILENAME
+    assert db_path.exists()
+    con = measurements.connect(db_path)
+    try:
+        assert measurements.is_populated(con)
+        [count] = con.execute("SELECT COUNT(*) FROM measurements").fetchone()
+        assert count == 12  # 6 turbines x 2 rows each, from _turbine_data_csv_text
+    finally:
+        con.close()
+
+
+def test_fetch_skips_rebuilding_the_duckdb_database_when_already_populated(tmp_path):
+    source = tmp_path / "source"
+    _make_source_csvs(source)
+    _make_source_turbine_data_csvs(source)
+    raw = tmp_path / "raw"
+    fetch_kelmarsh(raw, local_dirs=[source])
+
+    # Tamper with the database directly, without removing turbine 1 entirely (so
+    # is_populated() still reports all six turbines present): a real rebuild
+    # would restore the deleted row.
+    con = measurements.connect(raw / measurements.DB_FILENAME)
+    con.execute("DELETE FROM measurements WHERE turbine = 1 AND wind_ms = 5.0")
+    con.close()
+
+    fetch_kelmarsh(raw, local_dirs=[source])
+
+    con = measurements.connect(raw / measurements.DB_FILENAME)
+    try:
+        assert measurements.is_populated(con)
+        [count] = con.execute("SELECT COUNT(*) FROM measurements").fetchone()
+        assert count == 11  # not rebuilt: still missing the row deleted above
+    finally:
+        con.close()
+
+
+def test_fetch_does_not_build_a_database_when_no_turbine_data_is_available(tmp_path):
+    source = tmp_path / "source"
+    _make_source_csvs(source)
+    raw = tmp_path / "raw"
+
+    fetch_kelmarsh(raw, local_dirs=[source])
+
+    assert not (raw / measurements.DB_FILENAME).exists()

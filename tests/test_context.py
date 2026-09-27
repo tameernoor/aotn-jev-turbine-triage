@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from jev_turbine.context import build_context
-from jev_turbine.measurements import MeasurementRow
+from jev_turbine.measurements import connect_in_memory
 from jev_turbine.models import Event
 
 START = datetime(2016, 1, 24, 16, 51, 17, tzinfo=timezone.utc)
@@ -25,24 +25,24 @@ def _event(
     )
 
 
-def _row(minutes_from_start: int, **values: float | None) -> MeasurementRow:
-    """A 10-minute row whose END timestamp is `minutes_from_start` minutes away
-    from START (negative = before). `values` gives only the columns that matter to
-    the test; the rest default to None, as measurements.load_measurements would
-    leave a column that never appeared in the source."""
-    all_values = {
-        "Power (kW)": None,
-        "Wind speed (m/s)": None,
-        "Rotor speed (RPM)": None,
-        "Grid frequency (Hz)": None,
-        "Grid voltage (V)": None,
-    }
-    all_values.update(values)
-    return MeasurementRow(timestamp=START + timedelta(minutes=minutes_from_start), values=all_values)
+def _db(rows: list[tuple]):
+    """An in-memory `measurements` table with the given (turbine, minutes_from_
+    START, power, wind, rotor, freq, volt) rows. `ts` is START of the row's own
+    10-minute period, per the (corrected) convention: a row stamped ts covers
+    [ts, ts+10min)."""
+    con = connect_in_memory()
+    if rows:
+        tuples = [
+            (turbine, START + timedelta(minutes=minutes), power, wind, rotor, freq, volt)
+            for turbine, minutes, power, wind, rotor, freq, volt in rows
+        ]
+        con.executemany("INSERT INTO measurements VALUES (?, ?, ?, ?, ?, ?, ?)", tuples)
+    return con
 
 
-def _lines(event: Event, rows: list[MeasurementRow], events: list[Event] | None = None) -> list[str]:
-    return build_context(event, rows, events if events is not None else [event]).split("\n")
+def _lines(event: Event, rows: list[tuple], events: list[Event] | None = None) -> list[str]:
+    con = _db(rows)
+    return build_context(event, con, events if events is not None else [event]).split("\n")
 
 
 # --- no data ----------------------------------------------------------------------
@@ -50,7 +50,7 @@ def _lines(event: Event, rows: list[MeasurementRow], events: list[Event] | None 
 
 def test_no_data_around_the_event_when_before_and_after_power_are_both_missing():
     event = _event()
-    rows = [_row(-30, **{"Power (kW)": None}), _row(30, **{"Power (kW)": None})]
+    rows = [(1, -20, None, None, None, None, None), (1, 20, None, None, None, None, None)]
 
     lines = _lines(event, rows)
 
@@ -68,16 +68,60 @@ def test_no_data_around_the_event_when_there_are_no_rows_at_all():
     assert lines[0] == "No 10-minute data around this event."
 
 
+# --- the period-start convention: a straddling row belongs to neither mean --------
+
+
+def test_a_row_straddling_the_event_start_counts_toward_neither_before_nor_after():
+    event = _event()
+    rows = [
+        # Fully before (ts+10min <= start): a clean 600 kW reading.
+        (1, -20, 600.0, None, None, None, None),
+        # Straddles the start (starts 5 min before it, ends 5 min after it): if
+        # this leaked into either mean it would show up as 999 kW.
+        (1, -5, 999.0, None, None, None, None),
+        # Fully after (ts >= start): a clean 0 kW reading.
+        (1, 20, 0.0, None, None, None, None),
+    ]
+
+    lines = _lines(event, rows)
+
+    assert lines[0] == "Before the event: power 600 kW (60-minute averages)."
+    assert "power 0 kW" in lines[1]
+    assert not any("999" in line for line in lines)
+
+
+def test_a_row_exactly_at_the_start_counts_as_after_not_straddling():
+    event = _event()
+    # ts == start: interval [start, start+10min) does not dip before the start, so
+    # it is fully after, not straddling.
+    rows = [(1, 0, 50.0, None, None, None, None)]
+
+    lines = _lines(event, rows)
+
+    assert lines[0] == "After the event: power 50 kW; power stayed below 50 kW for 0 min."
+
+
+def test_a_row_ending_exactly_at_the_start_counts_as_before_not_straddling():
+    event = _event()
+    # ts + 10min == start: interval [ts, start) does not reach past the start, so
+    # it is fully before, not straddling.
+    rows = [(1, -10, 600.0, None, None, None, None)]
+
+    lines = _lines(event, rows)
+
+    assert lines[0] == "Before the event: power 600 kW (60-minute averages)."
+
+
 # --- before / after / rounding -----------------------------------------------------
 
 
 def test_before_and_after_lines_are_rounded_and_comma_formatted():
     event = _event()
     rows = [
-        _row(-50, **{"Power (kW)": 1500.0, "Wind speed (m/s)": 9.76}),
-        _row(-40, **{"Power (kW)": 1540.0, "Wind speed (m/s)": 9.84}),
-        _row(10, **{"Power (kW)": 621.0}),
-        _row(20, **{"Power (kW)": 623.0}),
+        (1, -50, 1500.0, 9.76, None, None, None),
+        (1, -40, 1540.0, 9.84, None, None, None),
+        (1, 10, 621.0, None, None, None, None),
+        (1, 20, 623.0, None, None, None, None),
     ]
 
     lines = _lines(event, rows)
@@ -88,7 +132,7 @@ def test_before_and_after_lines_are_rounded_and_comma_formatted():
 
 def test_before_line_omits_wind_when_wind_is_missing():
     event = _event()
-    rows = [_row(-10, **{"Power (kW)": 600.0}), _row(10, **{"Power (kW)": 600.0})]
+    rows = [(1, -10, 600.0, None, None, None, None), (1, 10, 600.0, None, None, None, None)]
 
     lines = _lines(event, rows)
 
@@ -97,7 +141,7 @@ def test_before_line_omits_wind_when_wind_is_missing():
 
 def test_after_line_is_omitted_when_only_before_power_is_present():
     event = _event()
-    rows = [_row(-10, **{"Power (kW)": 600.0})]
+    rows = [(1, -10, 600.0, None, None, None, None)]
 
     lines = _lines(event, rows)
 
@@ -111,9 +155,9 @@ def test_after_line_is_omitted_when_only_before_power_is_present():
 def test_power_never_drops_below_50kw_gives_zero_duration():
     event = _event()
     rows = [
-        _row(-10, **{"Power (kW)": 600.0}),
-        _row(10, **{"Power (kW)": 580.0}),
-        _row(20, **{"Power (kW)": 590.0}),
+        (1, -10, 600.0, None, None, None, None),
+        (1, 10, 580.0, None, None, None, None),
+        (1, 20, 590.0, None, None, None, None),
     ]
 
     lines = _lines(event, rows)
@@ -124,9 +168,9 @@ def test_power_never_drops_below_50kw_gives_zero_duration():
 def test_drop_and_recovery_duration_rounds_to_nearest_ten_minutes():
     event = _event()
     rows = [
-        _row(-10, **{"Power (kW)": 600.0}),
-        _row(10, **{"Power (kW)": 0.0}),
-        _row(370, **{"Power (kW)": 60.0}),  # recovers 6h10min after the start
+        (1, -10, 600.0, None, None, None, None),
+        (1, 10, 0.0, None, None, None, None),
+        (1, 370, 60.0, None, None, None, None),  # recovers 6h10min after the start
     ]
 
     lines = _lines(event, rows)
@@ -137,10 +181,10 @@ def test_drop_and_recovery_duration_rounds_to_nearest_ten_minutes():
 def test_drop_duration_is_capped_at_24_hours_when_never_recovered():
     event = _event()
     rows = [
-        _row(-10, **{"Power (kW)": 600.0}),
-        _row(10, **{"Power (kW)": 0.0}),
+        (1, -10, 600.0, None, None, None, None),
+        (1, 10, 0.0, None, None, None, None),
         # Still below 50 kW at 2 days out; never recovers within the data.
-        _row(60 * 48, **{"Power (kW)": 10.0}),
+        (1, 60 * 48, 10.0, None, None, None, None),
     ]
 
     lines = _lines(event, rows)
@@ -151,10 +195,10 @@ def test_drop_duration_is_capped_at_24_hours_when_never_recovered():
 def test_drop_duration_skips_missing_readings_when_looking_for_recovery():
     event = _event()
     rows = [
-        _row(-10, **{"Power (kW)": 600.0}),
-        _row(10, **{"Power (kW)": 0.0}),
-        _row(20, **{"Power (kW)": None}),  # a gap in the middle of the drop
-        _row(30, **{"Power (kW)": 100.0}),  # recovery, 30 min after the start
+        (1, -10, 600.0, None, None, None, None),
+        (1, 10, 0.0, None, None, None, None),
+        (1, 20, None, None, None, None, None),  # a gap in the middle of the drop
+        (1, 30, 100.0, None, None, None, None),  # recovery, 30 min after the start
     ]
 
     lines = _lines(event, rows)
@@ -167,7 +211,7 @@ def test_drop_duration_skips_missing_readings_when_looking_for_recovery():
 
 def test_rotor_and_grid_lines_are_omitted_when_no_values_exist():
     event = _event()
-    rows = [_row(-10, **{"Power (kW)": 600.0}), _row(10, **{"Power (kW)": 600.0})]
+    rows = [(1, -10, 600.0, None, None, None, None), (1, 10, 600.0, None, None, None, None)]
 
     lines = _lines(event, rows)
 
@@ -178,9 +222,9 @@ def test_rotor_and_grid_lines_are_omitted_when_no_values_exist():
 def test_rotor_line_rounds_to_the_nearest_whole_rpm():
     event = _event()
     rows = [
-        _row(-10, **{"Power (kW)": 600.0}),
-        _row(10, **{"Power (kW)": 0.0, "Rotor speed (RPM)": 0.4}),
-        _row(20, **{"Power (kW)": 0.0, "Rotor speed (RPM)": 0.2}),
+        (1, -10, 600.0, None, None, None, None),
+        (1, 10, 0.0, None, 0.4, None, None),
+        (1, 20, 0.0, None, 0.2, None, None),
     ]
 
     lines = _lines(event, rows)
@@ -191,9 +235,9 @@ def test_rotor_line_rounds_to_the_nearest_whole_rpm():
 def test_grid_line_reports_min_and_max_rounded_and_can_omit_one_side():
     event = _event()
     rows = [
-        _row(-10, **{"Power (kW)": 600.0}),
-        _row(10, **{"Power (kW)": 600.0, "Grid frequency (Hz)": 49.978}),
-        _row(20, **{"Power (kW)": 600.0, "Grid frequency (Hz)": 50.021}),
+        (1, -10, 600.0, None, None, None, None),
+        (1, 10, 600.0, None, None, 49.978, None),
+        (1, 20, 600.0, None, None, 50.021, None),
     ]
 
     lines = _lines(event, rows)
@@ -204,11 +248,12 @@ def test_grid_line_reports_min_and_max_rounded_and_can_omit_one_side():
 def test_grid_line_uses_a_thirty_minute_half_window_around_the_start():
     event = _event()
     rows = [
-        _row(-10, **{"Power (kW)": 600.0}),
-        _row(10, **{"Power (kW)": 600.0}),
-        # Just outside the +/- 30 minute grid window; must not affect min/max.
-        _row(45, **{"Power (kW)": 600.0, "Grid voltage (V)": 999.0}),
-        _row(20, **{"Power (kW)": 600.0, "Grid voltage (V)": 690.0}),
+        (1, -10, 600.0, None, None, None, None),
+        (1, 10, 600.0, None, None, None, None),
+        (1, 20, None, None, None, None, 690.0),
+        # Fully outside the +/-30 minute grid window (ts+10min > start+30min):
+        # must not affect min/max.
+        (1, 25, None, None, None, None, 999.0),
     ]
 
     lines = _lines(event, rows)
@@ -319,10 +364,10 @@ def test_farm_wide_stop_says_no_when_none_found():
 def test_full_render_matches_the_documented_example_shape():
     event = _event()
     rows = [
-        _row(-50, **{"Power (kW)": 1500.0, "Wind speed (m/s)": 9.76}),
-        _row(-40, **{"Power (kW)": 1540.0, "Wind speed (m/s)": 9.84}),
-        _row(10, **{"Power (kW)": 0.0, "Rotor speed (RPM)": 0.0, "Grid frequency (Hz)": 49.978, "Grid voltage (V)": 690.0}),
-        _row(370, **{"Power (kW)": 60.0}),  # recovers 6h10min after the start
+        (1, -50, 1500.0, 9.76, None, None, None),
+        (1, -40, 1540.0, 9.84, None, None, None),
+        (1, 10, 0.0, None, 0.0, 49.978, 690.0),
+        (1, 370, 60.0, None, None, None, None),  # recovers 6h10min after the start
     ]
     events = [
         _event(start=event.start - timedelta(days=2), message="Frequency converter error"),
@@ -331,16 +376,14 @@ def test_full_render_matches_the_documented_example_shape():
         event,
     ]
 
-    text = build_context(event, rows, events)
+    lines = _lines(event, rows, events)
 
-    assert text == "\n".join(
-        [
-            "Before the event: power 1,520 kW, wind 9.8 m/s (60-minute averages).",
-            "After the event: power 0 kW; power stayed below 50 kW for 6 h 10 min.",
-            "Rotor after the event: 0 RPM.",
-            "Grid in the hour around the event: frequency 49.98 to 49.98 Hz, voltage 690 to 690 V.",
-            "Same message on this turbine in the previous 7 days: 1 times.",
-            "Event just before on this turbine (within 30 min): Grid loss.",
-            "Other turbines stopped in the same 10 minutes: yes (1).",
-        ]
-    )
+    assert lines == [
+        "Before the event: power 1,520 kW, wind 9.8 m/s (60-minute averages).",
+        "After the event: power 0 kW; power stayed below 50 kW for 6 h 10 min.",
+        "Rotor after the event: 0 RPM.",
+        "Grid in the hour around the event: frequency 49.98 to 49.98 Hz, voltage 690 to 690 V.",
+        "Same message on this turbine in the previous 7 days: 1 times.",
+        "Event just before on this turbine (within 30 min): Grid loss.",
+        "Other turbines stopped in the same 10 minutes: yes (1).",
+    ]

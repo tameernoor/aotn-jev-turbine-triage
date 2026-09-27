@@ -15,6 +15,13 @@ CSVs, this step never raises and never triggers its own download; a source that
 offers only Status CSVs (common in tests, and for a partial local mirror) is left
 alone, and a real run picks the Turbine_Data files up from the same zip once it
 has been downloaded for the Status CSVs.
+
+Once at least one Turbine_Data CSV is present in `raw_dir`, this also (re)builds
+`data/raw/kelmarsh.duckdb`'s `measurements` table from whatever Turbine_Data CSVs
+are there (see measurements.py), skipping the rebuild if the database already has
+all six turbines. Unlike the CSV steps, this one is not best-effort: once a CSV is
+confirmed present, loading it is expected to succeed, and a malformed file raises
+measurements.LoadError rather than being silently skipped.
 """
 
 from __future__ import annotations
@@ -25,6 +32,8 @@ import shutil
 import urllib.request
 import zipfile
 from pathlib import Path
+
+from . import measurements
 
 TURBINE_COUNT = 6
 ZENODO_RECORD_ID = "16807551"
@@ -54,7 +63,8 @@ def fetch_kelmarsh(raw_dir: Path, local_dirs: list[Path] | None = None) -> list[
     sources = _resolve_local_dirs() if local_dirs is None else local_dirs
 
     status_paths = _fetch_status_csvs(raw_dir, sources)
-    _ensure_turbine_data_csvs(raw_dir, sources)
+    turbine_data_paths = _ensure_turbine_data_csvs(raw_dir, sources)
+    _ensure_duckdb(raw_dir, turbine_data_paths)
     return status_paths
 
 
@@ -112,6 +122,21 @@ def _ensure_turbine_data_csvs(raw_dir: Path, sources: list[Path]) -> list[Path]:
         return _extract_turbine_data_csvs(downloaded_zip, raw_dir)
 
     return existing
+
+
+def _ensure_duckdb(raw_dir: Path, turbine_data_paths: list[Path]) -> None:
+    """(Re)build data/raw/kelmarsh.duckdb's `measurements` table from
+    `turbine_data_paths`, unless it already has all six turbines. Does nothing if
+    `turbine_data_paths` is empty (the best-effort Turbine_Data step above found
+    nothing to load from)."""
+    if not turbine_data_paths:
+        return
+    con = measurements.connect(raw_dir / measurements.DB_FILENAME)
+    try:
+        if not measurements.is_populated(con):
+            measurements.build_database(con, turbine_data_paths)
+    finally:
+        con.close()
 
 
 def _resolve_local_dirs() -> list[Path]:

@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Jev triages wind turbine events, code decides. Companion code for an article."
 requires-python = ">=3.12"
 dependencies = [
+    "duckdb>=1.5.5",
     "pyyaml>=6",
     "typesafe-sdk>=0.7.1",
 ]

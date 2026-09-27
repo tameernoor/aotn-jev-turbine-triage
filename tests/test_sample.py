@@ -5,7 +5,7 @@ from pathlib import Path
 from jev_turbine.checks import chattering, floods, long_stops
 from jev_turbine.context import build_context
 from jev_turbine.loader import load_events
-from jev_turbine.measurements import ALLOWED_COLUMNS, load_measurements
+from jev_turbine.measurements import FIELD_NAMES, build_database_from_dir, connect_in_memory
 
 SAMPLE_DIR = Path(__file__).resolve().parent.parent / "data" / "sample"
 
@@ -58,16 +58,18 @@ def test_sample_has_a_real_flood_window():
     assert len({events[i].turbine for i in flagged}) > 1
 
 
-def test_sample_measurements_load_and_cover_all_three_turbines_with_allowed_columns_only():
-    by_turbine = load_measurements(SAMPLE_DIR)
+def test_sample_measurements_load_into_duckdb_and_cover_all_three_turbines():
+    con = connect_in_memory()
+    build_database_from_dir(con, SAMPLE_DIR)
 
-    assert set(by_turbine) == {1, 2, 6}
-    for rows in by_turbine.values():
-        assert len(rows) > 0
-        for row in rows:
-            assert set(row.values) == set(ALLOWED_COLUMNS)
-        # Time sorted, as measurements.load_measurements promises.
-        assert [r.timestamp for r in rows] == sorted(r.timestamp for r in rows)
+    turbines = {row[0] for row in con.execute("SELECT DISTINCT turbine FROM measurements").fetchall()}
+    assert turbines == {1, 2, 6}
+    for n in (1, 2, 6):
+        [(count,)] = con.execute("SELECT COUNT(*) FROM measurements WHERE turbine = ?", [n]).fetchall()
+        assert count > 0
+    # Only the five allowed columns exist at all, structurally (see test_measurements.py).
+    columns = {row[1] for row in con.execute("PRAGMA table_info('measurements')").fetchall()}
+    assert columns == {"turbine", "ts", *FIELD_NAMES.values()}
 
 
 def test_sample_measurements_are_under_the_one_megabyte_target():
@@ -78,10 +80,11 @@ def test_sample_measurements_are_under_the_one_megabyte_target():
 
 def test_sample_measurements_build_real_context_for_a_sample_event():
     events = load_events(SAMPLE_DIR)
-    by_turbine = load_measurements(SAMPLE_DIR)
+    con = connect_in_memory()
+    build_database_from_dir(con, SAMPLE_DIR)
     stop = next(e for e in events if e.turbine == "Kelmarsh 1" and e.status == "Stop")
 
-    context = build_context(stop, by_turbine[1], events)
+    context = build_context(stop, con, events)
 
     assert context
     assert "previous 7 days" in context
