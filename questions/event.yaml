@@ -1,24 +1,40 @@
-# Wind turbine event questions. Jev sees only `status` and `message`, never the code
-# or the operator's own category labels. All three are sent to Jev in one request per
-# distinct (status, message) pair; see triage.py for which ones the rules actually read.
+# Wind turbine event questions. Jev sees only `status` and `message`, never the code or
+# the operator's own category labels. Each question asks one literal thing about the
+# message text; code combines the answers (see triage.py). All five are sent to Jev in
+# one request per distinct (status, message) pair.
 # Keys "true" and "false" are quoted so YAML keeps them as strings.
 
-cause:
-  type: choice
-  instructions: What most likely caused this wind turbine event? Judge from `status` and `message` only.
-  criteria:
-    fault: A defect or failure in the turbine itself, such as a converter, brake, gearbox, sensor or safety chain problem.
-    planned: Planned or routine activity, such as a test, maintenance on site, a manual stop by staff, a stop requested by the park controller or owner, cable unwinding or oil flushing.
-    external: Conditions outside the turbine, such as the power grid, grid frequency or voltage, or wind that is too weak, too strong or from the wrong direction.
-    running: The turbine is still producing and the event only reports a condition, such as a warm-up stage or a minor warning.
-
-safety_related:
+names_safety_hazard:
   type: noul
-  instructions: Does this event indicate a risk to people or to the turbine's structure, such as an emergency stop, a safety chain, overspeed or tower oscillation?
-
-needs_site_visit:
-  type: noul
-  instructions: Would a technician most likely have to go to the turbine to fix this?
+  instructions: Does `message` name an emergency stop, a safety chain, overspeed, excessive rotor speed, tower oscillation or vibration, fire or smoke?
   criteria:
-    "true": The message describes worn, broken or defective equipment that cannot be reset remotely.
-    "false": The condition clears by itself, can be reset remotely, or is a planned activity.
+    "true": The message names one of these, for example "Emergency stop nacelle" or "Safety chain open".
+    "false": The message names none of these. A brake, a temperature or a pressure alone does not count.
+
+names_physical_damage:
+  type: noul
+  instructions: Does `message` say that a part is worn, broken, leaking or defective?
+  criteria:
+    "true": The message uses a word such as worn, broken, leaking, defect or defective about a part.
+    "false": The message reports an error, a fault, a timeout, an overload, a trip or a limit being reached, which may be reset without replacing anything, or names no part at all.
+
+names_routine:
+  type: noul
+  instructions: Does `message` describe a test, maintenance, a manual or remote stop by people, a stop requested by the owner or park controller, or a routine procedure such as cable unwinding or oil flushing?
+  criteria:
+    "true": The message describes an activity someone chose to do or a scheduled procedure.
+    "false": The message describes something that happened to the turbine, such as an error, a fault, a limit or a weather or grid condition.
+
+names_outside_condition:
+  type: noul
+  instructions: Does `message` name the power grid, grid frequency, grid voltage, a grid loss, or the wind being too weak, too strong or from the wrong direction?
+  criteria:
+    "true": The message names the grid or the wind as the condition.
+    "false": The message names a part of the turbine. A converter, including a "frequency converter", is part of the turbine, not the grid.
+
+names_turbine_problem:
+  type: noul
+  instructions: Does `message` name an error, fault, failure, defect, timeout, overload or trip in a part or system of the turbine itself?
+  criteria:
+    "true": The message names a problem with something inside the turbine, such as the converter, brake, gearbox, generator, pitch, yaw, hydraulics, a sensor or the controller.
+    "false": The message only reports a status, a stage or a procedure, or names the grid or wind.

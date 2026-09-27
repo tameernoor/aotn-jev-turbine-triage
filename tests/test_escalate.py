@@ -12,16 +12,16 @@ from jev_turbine.triage import ACT_NOW, MONITOR, NO_ACTION, triage
 
 T0 = datetime(2016, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
-# Step-1 judgments (fakes.answers shape) pre-seeded straight into the step-1 cache, so
-# triage() never needs an actual Jev call and each test controls exactly which of its
-# events step 1 leaves uncertain.
-UNCERTAIN_CAUSE = answers(
-    cause={"type": "choice", "value": "fault", "probabilities": {"fault": 0.5}, "confidence": 0.5},
-    safety_related=0.1,
-    needs_site_visit=0.1,
-)
-PLANNED = answers(cause="planned", safety_related=0.1)
-RUNNING = answers(cause="running", safety_related=0.1)
+# Step-1 judgments (fakes.answers shape), in questions/event.yaml's five ids, pre-seeded
+# straight into the step-1 cache, so triage() never needs an actual Jev call and each
+# test controls exactly which of its events step 1 leaves uncertain. Step 1's own rules
+# live in triage.py (Task 1); this file only exercises step 2 (escalate.py, still the
+# old Jev-based re-ask, Task 2's job), so these fixtures just need to reproduce step 1's
+# former MONITOR/"uncertain: ..."-, NO_ACTION/"planned"- and MONITOR/"warning while
+# running"-shaped results, not any particular cause.
+UNCERTAIN_CAUSE = answers(names_safety_hazard=0.1, names_physical_damage=0.1, names_routine=0.5)
+PLANNED = answers(names_safety_hazard=0.1, names_physical_damage=0.1, names_routine=0.9)
+RUNNING = answers(names_safety_hazard=0.1, names_physical_damage=0.1, names_routine=0.1, names_outside_condition=0.1, names_turbine_problem=0.1)
 
 
 def ev(turbine="Kelmarsh 1", start=T0, end=None, duration=None, status="Warning", code="1", message="msg", iec_category=None):
@@ -88,7 +88,7 @@ def test_only_uncertain_events_escalate():
     results = step1(events, cache)
 
     # Sanity: confirm each scenario landed where the test intends before escalating.
-    assert results[0].triage == MONITOR and results[0].reasons == ["uncertain: cause"]
+    assert results[0].triage == MONITOR and results[0].reasons == ["uncertain: names_routine"]
     assert results[1].triage == MONITOR and results[1].reasons == ["planned", "long stop"]
     assert results[2].triage == MONITOR and results[2].reasons == ["warning while running"]
     assert results[3].triage == NO_ACTION and results[3].reasons == ["informational"]
@@ -166,7 +166,7 @@ def test_step1_fields_are_kept():
     final = asyncio.run(escalate(results, [event], [event], con, step2_fake.ask, cache={}))
 
     assert final[0].step1_triage == MONITOR
-    assert final[0].step1_reasons == ["uncertain: cause"]
+    assert final[0].step1_reasons == ["uncertain: names_routine"]
     assert final[0].turbine == event.turbine
     assert final[0].start == event.start
     assert final[0].status == event.status
@@ -181,7 +181,7 @@ def test_long_stop_reason_and_floor_are_reapplied_to_the_step2_result():
     event = ev(status="Stop", message="Pitch fault", duration=30 * 3600)
     cache = {"Stop": {"Pitch fault": UNCERTAIN_CAUSE}}
     results = step1([event], cache)
-    assert results[0].reasons == ["uncertain: cause", "long stop"]
+    assert results[0].reasons == ["uncertain: names_routine", "long stop"]
 
     con = connect_in_memory()
     # Step 2 resolves the uncertainty to a confident, otherwise no_action cause.
@@ -215,7 +215,7 @@ def test_step2_still_uncertain_stays_monitor_with_the_step2_reason():
 
     assert final[0].triage == MONITOR
     assert final[0].reasons == ["uncertain: needs_site_visit"]
-    assert final[0].step1_reasons == ["uncertain: cause"]
+    assert final[0].step1_reasons == ["uncertain: names_routine"]
 
 
 def test_chattering_and_uncertain_event_keeps_the_chattering_reason_after_step2():
@@ -223,7 +223,7 @@ def test_chattering_and_uncertain_event_keeps_the_chattering_reason_after_step2(
     cache = {"Stop": {"Yaw error": UNCERTAIN_CAUSE}}
     results = step1(events, cache)
     assert all(r.chattering for r in results)
-    assert all(r.reasons == ["uncertain: cause", "chattering"] for r in results)
+    assert all(r.reasons == ["uncertain: names_routine", "chattering"] for r in results)
 
     con = connect_in_memory()
     step2_fake = FakeJev(values=dict(cause="external", safety_related=0.1))
@@ -240,7 +240,7 @@ def test_flood_flag_is_carried_over_to_the_step2_result():
     cache["Warning"]["m0"] = UNCERTAIN_CAUSE
     results = step1(events, cache)
     assert results[0].flood is True
-    assert results[0].triage == MONITOR and results[0].reasons == ["uncertain: cause"]
+    assert results[0].triage == MONITOR and results[0].reasons == ["uncertain: names_routine"]
 
     con = connect_in_memory()
     step2_fake = FakeJev(values=dict(cause="fault", safety_related=0.1, needs_site_visit=0.9))

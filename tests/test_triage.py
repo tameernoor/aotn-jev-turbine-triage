@@ -5,7 +5,19 @@ from fakes import FakeJev, answers
 
 from jev_turbine.judgments import Judgments
 from jev_turbine.models import Event
-from jev_turbine.triage import ACT_NOW, MONITOR, NO_ACTION, apply_rules, triage
+from jev_turbine.triage import (
+    ACT_NOW,
+    EXTERNAL,
+    FAULT,
+    MONITOR,
+    NO_ACTION,
+    PLANNED,
+    RUNNING,
+    UNCLEAR,
+    apply_step1_rules,
+    derive_cause,
+    triage,
+)
 
 T0 = datetime(2016, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -27,119 +39,177 @@ def run(events, fake, cache=None):
     return asyncio.run(triage(events, fake.ask, cache))
 
 
-# --- apply_rules: one rule branch at a time, no Jev involved ---
+# A confident "yes" and a confident "no" for a noul, matching judgments.py's YES/NO
+# thresholds (0.8 / 0.2 inclusive).
+YES = 0.9
+NO = 0.1
+BETWEEN = 0.5  # uncertain: strictly between NO and YES
 
 
-def test_rule2_uncertain_cause_sends_to_monitor():
-    # cause's pick is "fault", so needs_site_visit is still read (a confident no here);
-    # cause's own low confidence is what sends this to monitor.
+# --- derive_cause(): each path, one question at a time -----------------------------
+
+
+def test_derive_cause_routine_yes_is_planned():
+    j = Judgments(answers(names_routine=YES))
+    assert derive_cause(j, status="Stop") == PLANNED
+
+
+def test_derive_cause_outside_condition_yes_is_external():
+    j = Judgments(answers(names_routine=NO, names_outside_condition=YES))
+    assert derive_cause(j, status="Stop") == EXTERNAL
+
+
+def test_derive_cause_turbine_problem_yes_is_fault():
+    j = Judgments(answers(names_routine=NO, names_outside_condition=NO, names_turbine_problem=YES))
+    assert derive_cause(j, status="Stop") == FAULT
+
+
+def test_derive_cause_all_no_and_warning_is_running():
+    j = Judgments(answers(names_routine=NO, names_outside_condition=NO, names_turbine_problem=NO))
+    assert derive_cause(j, status="Warning") == RUNNING
+
+
+def test_derive_cause_all_no_and_not_warning_is_unclear():
+    j = Judgments(answers(names_routine=NO, names_outside_condition=NO, names_turbine_problem=NO))
+    assert derive_cause(j, status="Stop") == UNCLEAR
+
+
+# --- derive_cause(): an uncertain read stops the chain, with the right id ----------
+
+
+def test_derive_cause_uncertain_routine_is_unclear_and_stops_the_chain():
+    j = Judgments(answers(names_routine=BETWEEN, names_outside_condition=YES, names_turbine_problem=YES))
+    assert derive_cause(j, status="Stop") == UNCLEAR
+    assert j.uncertain == ["names_routine"]
+    assert j.read == ["names_routine"]  # the later two are never read
+
+
+def test_derive_cause_uncertain_outside_condition_is_unclear_and_stops_the_chain():
+    j = Judgments(answers(names_routine=NO, names_outside_condition=BETWEEN, names_turbine_problem=YES))
+    assert derive_cause(j, status="Stop") == UNCLEAR
+    assert j.uncertain == ["names_outside_condition"]
+    assert "names_turbine_problem" not in j.read
+
+
+def test_derive_cause_uncertain_turbine_problem_is_unclear():
+    j = Judgments(answers(names_routine=NO, names_outside_condition=NO, names_turbine_problem=BETWEEN))
+    assert derive_cause(j, status="Stop") == UNCLEAR
+    assert j.uncertain == ["names_turbine_problem"]
+
+
+def test_derive_cause_stops_at_first_decision_a_confident_yes_never_reads_later_questions():
+    j = Judgments(answers(names_routine=YES, names_outside_condition=BETWEEN, names_turbine_problem=BETWEEN))
+    assert derive_cause(j, status="Stop") == PLANNED
+    assert j.read == ["names_routine"]
+    assert j.uncertain == []
+
+
+# --- apply_step1_rules(): each triage rule ------------------------------------------
+
+
+def test_rule_safety_hazard_yes_is_act_now():
+    j = Judgments(answers(names_safety_hazard=YES, names_physical_damage=NO, names_routine=YES))
+    assert apply_step1_rules(j, status="Stop") == (ACT_NOW, ["safety"], PLANNED)
+
+
+def test_rule_physical_damage_yes_is_act_now():
     j = Judgments(
         answers(
-            cause={"type": "choice", "value": "fault", "probabilities": {"fault": 0.5}, "confidence": 0.5},
-            safety_related=0.1,
-            needs_site_visit=0.1,
+            names_safety_hazard=NO,
+            names_physical_damage=YES,
+            names_routine=NO,
+            names_outside_condition=NO,
+            names_turbine_problem=YES,
         )
     )
-    assert apply_rules(j, status="Stop") == (MONITOR, ["uncertain: cause"])
+    assert apply_step1_rules(j, status="Stop") == (ACT_NOW, ["damaged part"], FAULT)
 
 
-def test_rule2_uncertain_safety_related_sends_to_monitor():
-    j = Judgments(answers(cause="planned", safety_related=0.5))
-    assert apply_rules(j, status="Stop") == (MONITOR, ["uncertain: safety_related"])
+def test_rule_an_uncertain_read_is_monitor_with_its_id():
+    j = Judgments(answers(names_safety_hazard=NO, names_physical_damage=NO, names_routine=BETWEEN))
+    assert apply_step1_rules(j, status="Stop") == (MONITOR, ["uncertain: names_routine"], UNCLEAR)
 
 
-def test_rule2_both_uncertain_lists_both_ids_in_read_order():
+def test_rule_multiple_uncertain_reads_list_every_id_in_read_order():
+    j = Judgments(answers(names_safety_hazard=BETWEEN, names_physical_damage=BETWEEN, names_routine=NO, names_outside_condition=NO, names_turbine_problem=NO))
+    assert apply_step1_rules(j, status="Stop") == (
+        MONITOR,
+        ["uncertain: names_safety_hazard, names_physical_damage"],
+        UNCLEAR,
+    )
+
+
+def test_rule_cause_unclear_with_no_uncertain_read_is_monitor_cause_unclear():
     j = Judgments(
         answers(
-            cause={"type": "choice", "value": "fault", "probabilities": {"fault": 0.5}, "confidence": 0.5},
-            safety_related=0.5,
-            needs_site_visit=0.1,
+            names_safety_hazard=NO,
+            names_physical_damage=NO,
+            names_routine=NO,
+            names_outside_condition=NO,
+            names_turbine_problem=NO,
         )
     )
-    assert apply_rules(j, status="Stop") == (MONITOR, ["uncertain: cause, safety_related"])
+    assert apply_step1_rules(j, status="Stop") == (MONITOR, ["cause unclear"], UNCLEAR)
 
 
-def test_confident_safety_yes_wins_over_an_uncertain_cause():
-    # safety_related is checked before the uncertainty check now, so a confident yes
-    # wins even when cause is uncertain.
+def test_rule_fault_is_monitor_remote_reset_may_clear_it():
     j = Judgments(
         answers(
-            cause={"type": "choice", "value": "fault", "probabilities": {"fault": 0.5}, "confidence": 0.5},
-            safety_related=0.95,
+            names_safety_hazard=NO,
+            names_physical_damage=NO,
+            names_routine=NO,
+            names_outside_condition=NO,
+            names_turbine_problem=YES,
         )
     )
-    assert apply_rules(j, status="Stop") == (ACT_NOW, ["safety"])
+    assert apply_step1_rules(j, status="Stop") == (MONITOR, ["fault, remote reset may clear it"], FAULT)
 
 
-def test_rule3_safety_related_yes_is_act_now():
-    j = Judgments(answers(cause="planned", safety_related=0.9))
-    assert apply_rules(j, status="Stop") == (ACT_NOW, ["safety"])
+def test_rule_running_while_warning_is_monitor():
+    j = Judgments(
+        answers(
+            names_safety_hazard=NO,
+            names_physical_damage=NO,
+            names_routine=NO,
+            names_outside_condition=NO,
+            names_turbine_problem=NO,
+        )
+    )
+    assert apply_step1_rules(j, status="Warning") == (MONITOR, ["warning while running"], RUNNING)
 
 
-def test_rule4_fault_needing_a_site_visit_is_act_now():
-    j = Judgments(answers(cause="fault", safety_related=0.1, needs_site_visit=0.9))
-    assert apply_rules(j, status="Stop") == (ACT_NOW, ["fault needing a site visit"])
+def test_rule_planned_is_no_action():
+    j = Judgments(answers(names_safety_hazard=NO, names_physical_damage=NO, names_routine=YES))
+    assert apply_step1_rules(j, status="Stop") == (NO_ACTION, ["planned"], PLANNED)
 
 
-def test_confident_fault_with_a_confident_site_visit_wins_over_an_uncertain_safety_related():
-    # The fault + site-visit check is checked before the uncertainty check now, so a
-    # confident yes wins even when safety_related is uncertain.
-    j = Judgments(answers(cause="fault", safety_related=0.5, needs_site_visit=0.9))
-    assert apply_rules(j, status="Stop") == (ACT_NOW, ["fault needing a site visit"])
+def test_rule_external_is_no_action():
+    j = Judgments(answers(names_safety_hazard=NO, names_physical_damage=NO, names_routine=NO, names_outside_condition=YES))
+    assert apply_step1_rules(j, status="Warning") == (NO_ACTION, ["external"], EXTERNAL)
 
 
-def test_uncertain_needs_site_visit_on_a_fault_sends_to_monitor():
-    j = Judgments(answers(cause="fault", safety_related=0.1, needs_site_visit=0.5))
-    assert apply_rules(j, status="Stop") == (MONITOR, ["uncertain: needs_site_visit"])
+# --- apply_step1_rules(): safety and physical damage win even over uncertainty -----
 
 
-def test_rule5_fault_not_needing_a_site_visit_is_monitor():
-    j = Judgments(answers(cause="fault", safety_related=0.1, needs_site_visit=0.1))
-    assert apply_rules(j, status="Stop") == (MONITOR, ["fault, remote reset may clear it"])
+def test_confident_safety_yes_wins_over_an_uncertain_cause_chain():
+    j = Judgments(answers(names_safety_hazard=YES, names_physical_damage=NO, names_routine=BETWEEN))
+    triage_class, reasons, _cause = apply_step1_rules(j, status="Stop")
+    assert (triage_class, reasons) == (ACT_NOW, ["safety"])
 
 
-def test_rule6_running_while_warning_is_monitor():
-    j = Judgments(answers(cause="running", safety_related=0.1))
-    assert apply_rules(j, status="Warning") == (MONITOR, ["warning while running"])
+def test_confident_physical_damage_yes_wins_over_an_uncertain_cause_chain():
+    j = Judgments(answers(names_safety_hazard=NO, names_physical_damage=YES, names_routine=BETWEEN))
+    triage_class, reasons, _cause = apply_step1_rules(j, status="Stop")
+    assert (triage_class, reasons) == (ACT_NOW, ["damaged part"])
 
 
-def test_rule6_does_not_fire_for_running_on_a_non_warning_status():
-    j = Judgments(answers(cause="running", safety_related=0.1))
-    assert apply_rules(j, status="Communication") == (NO_ACTION, ["running"])
+def test_confident_safety_yes_wins_even_when_physical_damage_is_itself_uncertain():
+    j = Judgments(answers(names_safety_hazard=YES, names_physical_damage=BETWEEN, names_routine=YES))
+    triage_class, reasons, _cause = apply_step1_rules(j, status="Stop")
+    assert (triage_class, reasons) == (ACT_NOW, ["safety"])
 
 
-def test_rule7_planned_is_no_action():
-    j = Judgments(answers(cause="planned", safety_related=0.1))
-    assert apply_rules(j, status="Stop") == (NO_ACTION, ["planned"])
-
-
-def test_rule7_external_is_no_action():
-    j = Judgments(answers(cause="external", safety_related=0.1))
-    assert apply_rules(j, status="Warning") == (NO_ACTION, ["external"])
-
-
-# --- fan-out: needs_site_visit is read only when cause is fault ---
-
-
-def test_needs_site_visit_is_read_for_a_fault():
-    j = Judgments(answers(cause="fault", safety_related=0.1, needs_site_visit=0.9))
-    apply_rules(j, status="Stop")
-    assert "needs_site_visit" in j.read
-
-
-def test_needs_site_visit_is_not_read_for_a_non_fault_cause():
-    j = Judgments(answers(cause="planned", safety_related=0.1, needs_site_visit=0.9))
-    apply_rules(j, status="Stop")
-    assert "needs_site_visit" not in j.read
-
-
-def test_needs_site_visit_is_not_read_when_safety_related_already_decided_the_event():
-    j = Judgments(answers(cause="fault", safety_related=0.9, needs_site_visit=0.9))
-    apply_rules(j, status="Stop")
-    assert "needs_site_visit" not in j.read
-
-
-# --- triage(): Jev is skipped for Informational events ---
+# --- triage(): Jev is skipped for Informational events ------------------------------
 
 
 def test_jev_is_not_asked_for_informational_events():
@@ -150,6 +220,7 @@ def test_jev_is_not_asked_for_informational_events():
     assert fake.calls == []
     assert results[0].triage == NO_ACTION
     assert results[0].reasons == ["informational"]
+    assert results[0].cause is None
 
 
 def test_chattering_informational_event_becomes_monitor():
@@ -166,9 +237,10 @@ def test_chattering_informational_event_becomes_monitor():
         assert result.triage == MONITOR
         assert result.reasons == ["chattering"]
         assert result.chattering is True
+        assert result.cause is None
 
 
-# --- triage(): the cache, one Jev request per distinct (status, message) pair ---
+# --- triage(): the cache, one Jev request per distinct (status, message) pair ------
 
 
 def test_one_call_per_distinct_status_message_pair():
@@ -178,7 +250,7 @@ def test_one_call_per_distinct_status_message_pair():
         ev(status="Warning", message="Pitch runtime error", start=T0 + timedelta(minutes=40)),
         ev(status="Stop", message="Emergency stop nacelle", start=T0 + timedelta(minutes=60)),
     ]
-    fake = FakeJev(values=dict(cause="planned", safety_related=0.1))
+    fake = FakeJev(values=dict(names_safety_hazard=NO, names_physical_damage=NO, names_routine=YES))
     cache = {}
     run(events, fake, cache)
 
@@ -194,7 +266,7 @@ def test_same_message_under_a_different_status_is_a_different_pair():
         ev(status="Warning", message="Generator temperature high"),
         ev(status="Stop", message="Generator temperature high"),
     ]
-    fake = FakeJev(values=dict(cause="planned", safety_related=0.1))
+    fake = FakeJev(values=dict(names_safety_hazard=NO, names_physical_damage=NO, names_routine=YES))
     run(events, fake)
 
     assert len(fake.calls) == 2
@@ -202,18 +274,30 @@ def test_same_message_under_a_different_status_is_a_different_pair():
 
 def test_jev_state_carries_only_status_and_message():
     events = [ev(status="Stop", message="Emergency stop nacelle")]
-    fake = FakeJev(values=dict(cause="fault", safety_related=0.1, needs_site_visit=0.9))
+    fake = FakeJev(values=dict(names_safety_hazard=YES, names_physical_damage=NO, names_routine=NO))
     run(events, fake)
 
     assert fake.calls[0]["state"] == {"status": "Stop", "message": "Emergency stop nacelle"}
-    assert set(fake.calls[0]["questions"]) == {"cause", "safety_related", "needs_site_visit"}
+    assert set(fake.calls[0]["questions"]) == {
+        "names_safety_hazard",
+        "names_physical_damage",
+        "names_routine",
+        "names_outside_condition",
+        "names_turbine_problem",
+    }
 
 
 def test_cache_can_be_pre_seeded_so_jev_is_not_asked_again():
     events = [ev(status="Stop", message="Emergency stop nacelle")]
-    cache = {"Stop": {"Emergency stop nacelle": answers(cause="fault", safety_related=0.9, needs_site_visit=0.1)}}
-    # An unconfigured FakeJev would answer differently (cause defaults to the first
-    # criterion, "fault", with every noul at 0.05), so a hit proves the cache was used.
+    cache = {
+        "Stop": {
+            "Emergency stop nacelle": answers(
+                names_safety_hazard=YES, names_physical_damage=NO, names_routine=NO, names_outside_condition=NO, names_turbine_problem=NO
+            )
+        }
+    }
+    # An unconfigured FakeJev would answer differently (every noul defaults to 0.05,
+    # a confident no), so a hit proves the cache was used.
     fake = FakeJev()
     results = run(events, fake, cache)
 
@@ -222,12 +306,33 @@ def test_cache_can_be_pre_seeded_so_jev_is_not_asked_again():
     assert results[0].reasons == ["safety"]
 
 
-# --- triage(): a long stop gets its reason and at least monitor ---
+# --- triage(): a FakeJev answer for a question that is never read must not count ---
+
+
+def test_an_uncertain_answer_on_an_unread_question_does_not_affect_the_result():
+    events = [ev(status="Stop", message="Cable unwind")]
+    fake = FakeJev(
+        values=dict(
+            names_safety_hazard=NO,
+            names_physical_damage=NO,
+            names_routine=YES,  # decides the cause immediately: planned
+            names_outside_condition=BETWEEN,  # never read: routine already decided
+            names_turbine_problem=BETWEEN,  # never read either
+        )
+    )
+    results = run(events, fake)
+
+    assert results[0].triage == NO_ACTION
+    assert results[0].reasons == ["planned"]
+    assert results[0].cause == PLANNED
+
+
+# --- triage(): a long stop gets its reason and at least monitor --------------------
 
 
 def test_long_stop_floors_no_action_up_to_monitor():
     events = [ev(status="Stop", message="Cable unwind", duration=25 * 3600)]
-    fake = FakeJev(values=dict(cause="planned", safety_related=0.1))
+    fake = FakeJev(values=dict(names_safety_hazard=NO, names_physical_damage=NO, names_routine=YES))
     results = run(events, fake)
 
     assert results[0].triage == MONITOR
@@ -235,24 +340,32 @@ def test_long_stop_floors_no_action_up_to_monitor():
 
 
 def test_long_stop_leaves_an_already_higher_triage_alone_but_still_adds_the_reason():
-    events = [ev(status="Stop", message="Gearbox bearing fault", duration=30 * 3600)]
-    fake = FakeJev(values=dict(cause="fault", safety_related=0.1, needs_site_visit=0.9))
+    events = [ev(status="Stop", message="Gearbox bearing worn", duration=30 * 3600)]
+    fake = FakeJev(
+        values=dict(
+            names_safety_hazard=NO,
+            names_physical_damage=YES,
+            names_routine=NO,
+            names_outside_condition=NO,
+            names_turbine_problem=YES,
+        )
+    )
     results = run(events, fake)
 
     assert results[0].triage == ACT_NOW
-    assert results[0].reasons == ["fault needing a site visit", "long stop"]
+    assert results[0].reasons == ["damaged part", "long stop"]
 
 
 def test_a_short_stop_is_not_marked_long_stop():
     events = [ev(status="Stop", message="Cable unwind", duration=23 * 3600)]
-    fake = FakeJev(values=dict(cause="planned", safety_related=0.1))
+    fake = FakeJev(values=dict(names_safety_hazard=NO, names_physical_damage=NO, names_routine=YES))
     results = run(events, fake)
 
     assert results[0].triage == NO_ACTION
     assert results[0].reasons == ["planned"]
 
 
-# --- triage(): a long stop and chattering can combine on the same event ---
+# --- triage(): a long stop and chattering can combine on the one event that is both ---
 
 
 def test_long_stop_and_chattering_combine_on_the_one_event_that_is_both():
@@ -261,7 +374,7 @@ def test_long_stop_and_chattering_combine_on_the_one_event_that_is_both():
         ev(status="Stop", message="Manual stop", start=T0 + timedelta(minutes=1)),
         ev(status="Stop", message="Manual stop", start=T0 + timedelta(minutes=2)),
     ]
-    fake = FakeJev(values=dict(cause="planned", safety_related=0.1))
+    fake = FakeJev(values=dict(names_safety_hazard=NO, names_physical_damage=NO, names_routine=YES))
     results = run(events, fake)
 
     long_and_chattering, chattering_only, _ = results
@@ -283,7 +396,7 @@ def test_chattering_non_informational_event_keeps_its_class_and_adds_a_reason():
         ev(status="Stop", message="Manual stop", start=T0 + timedelta(minutes=1)),
         ev(status="Stop", message="Manual stop", start=T0 + timedelta(minutes=2)),
     ]
-    fake = FakeJev(values=dict(cause="planned", safety_related=0.1))
+    fake = FakeJev(values=dict(names_safety_hazard=NO, names_physical_damage=NO, names_routine=YES))
     results = run(events, fake)
 
     for result in results:
@@ -292,19 +405,19 @@ def test_chattering_non_informational_event_keeps_its_class_and_adds_a_reason():
         assert result.reasons == ["planned", "chattering"]
 
 
-# --- triage(): flood only sets the flag, it does not change class or reasons ---
+# --- triage(): flood only sets the flag, it does not change class or reasons -------
 
 
 def test_flood_only_flags_the_events_it_does_not_change_their_triage():
     events = [ev(status="Warning", message=f"m{i}", start=T0 + timedelta(seconds=i)) for i in range(11)]
-    fake = FakeJev(values=dict(cause="planned", safety_related=0.1))
+    fake = FakeJev(values=dict(names_safety_hazard=NO, names_physical_damage=NO, names_routine=YES))
     results = run(events, fake)
 
     assert all(result.flood is True for result in results)
     assert all(result.triage == NO_ACTION and result.reasons == ["planned"] for result in results)
 
 
-# --- triage(): results line up with events, one per event, same order ---
+# --- triage(): results line up with events, one per event, same order --------------
 
 
 def test_results_are_returned_in_event_order():
@@ -313,7 +426,7 @@ def test_results_are_returned_in_event_order():
         ev(status="Stop", message="b", start=T0 + timedelta(hours=1)),
         ev(status="Warning", message="c", start=T0 + timedelta(hours=2)),
     ]
-    fake = FakeJev(values=dict(cause="planned", safety_related=0.1))
+    fake = FakeJev(values=dict(names_safety_hazard=NO, names_physical_damage=NO, names_routine=YES))
     results = run(events, fake)
 
     assert [r.message for r in results] == ["a", "b", "c"]

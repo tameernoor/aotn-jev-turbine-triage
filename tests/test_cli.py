@@ -49,13 +49,13 @@ class SlowRaisingAsk:
 class TwoPhaseFakeJev:
     """A stand-in for Jev whose answers depend on whether the state carries a
     `context` key. Step 1 (no context) is deliberately left uncertain, via a
-    borderline safety_related noul, so every non-informational sample event
-    escalates; step 2 (context present) answers confidently and differently,
-    so escalation visibly changes the outcome. Kept as two separate FakeJevs
-    so each phase's own call count and states are inspectable."""
+    borderline names_safety_hazard noul, so every non-informational sample event
+    escalates; step 2 (context present, still the old three-question set) answers
+    confidently and differently, so escalation visibly changes the outcome. Kept as two
+    separate FakeJevs so each phase's own call count and states are inspectable."""
 
     def __init__(self):
-        self.step1 = FakeJev(values=dict(cause="fault", safety_related=0.5, needs_site_visit=0.1))
+        self.step1 = FakeJev(values=dict(names_safety_hazard=0.5))
         self.step2 = FakeJev(values=dict(cause="planned", safety_related=0.1))
 
     async def ask(self, state, questions):
@@ -83,7 +83,7 @@ def test_resolve_data_dir_explicit_data_wins_over_sample_flag():
 
 def test_run_end_to_end_on_sample_writes_all_three_outputs(tmp_path, capsys):
     out_dir = tmp_path / "out"
-    fake = FakeJev(values=dict(cause="planned", safety_related=0.1))
+    fake = FakeJev(values=dict(names_safety_hazard=0.1, names_physical_damage=0.1, names_routine=0.9, cause="planned", safety_related=0.1))
 
     main(["run", "--sample", "--out", str(out_dir)], ask=fake.ask)
 
@@ -128,7 +128,7 @@ def test_run_end_to_end_on_sample_writes_all_three_outputs(tmp_path, capsys):
 
 def test_run_end_to_end_uses_duration_seconds_key_not_duration(tmp_path):
     out_dir = tmp_path / "out"
-    fake = FakeJev(values=dict(cause="planned", safety_related=0.1))
+    fake = FakeJev(values=dict(names_safety_hazard=0.1, names_physical_damage=0.1, names_routine=0.9, cause="planned", safety_related=0.1))
 
     main(["run", "--sample", "--out", str(out_dir)], ask=fake.ask)
 
@@ -141,11 +141,11 @@ def test_run_end_to_end_uses_duration_seconds_key_not_duration(tmp_path):
 
 def test_second_run_reuses_the_cache_and_makes_no_new_jev_calls(tmp_path):
     out_dir = tmp_path / "out"
-    first = FakeJev(values=dict(cause="planned", safety_related=0.1))
+    first = FakeJev(values=dict(names_safety_hazard=0.1, names_physical_damage=0.1, names_routine=0.9, cause="planned", safety_related=0.1))
     main(["run", "--sample", "--out", str(out_dir)], ask=first.ask)
     assert len(first.calls) > 0
 
-    second = FakeJev(values=dict(cause="planned", safety_related=0.1))
+    second = FakeJev(values=dict(names_safety_hazard=0.1, names_physical_damage=0.1, names_routine=0.9, cause="planned", safety_related=0.1))
     main(["run", "--sample", "--out", str(out_dir)], ask=second.ask)
 
     assert len(second.calls) == 0
@@ -153,7 +153,7 @@ def test_second_run_reuses_the_cache_and_makes_no_new_jev_calls(tmp_path):
 
 def test_summary_reports_jev_usage_and_wall_time(tmp_path, capsys):
     out_dir = tmp_path / "out"
-    fake = FakeJev(values=dict(cause="planned", safety_related=0.1))
+    fake = FakeJev(values=dict(names_safety_hazard=0.1, names_physical_damage=0.1, names_routine=0.9, cause="planned", safety_related=0.1))
 
     main(["run", "--sample", "--out", str(out_dir)], ask=fake.ask)
 
@@ -170,7 +170,7 @@ def test_run_on_a_custom_data_dir(tmp_path):
     for path in SAMPLE_DIR.glob("Status_*.csv"):
         (data_dir / path.name).write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
     out_dir = tmp_path / "out"
-    fake = FakeJev(values=dict(cause="planned", safety_related=0.1))
+    fake = FakeJev(values=dict(names_safety_hazard=0.1, names_physical_damage=0.1, names_routine=0.9, cause="planned", safety_related=0.1))
 
     # --no-context: this custom dir has no Turbine_Data CSVs, and a --data dir is
     # independent of --sample, so step 2 would otherwise try to open the persisted
@@ -185,7 +185,7 @@ def test_run_on_a_custom_data_dir(tmp_path):
 
 def test_summary_json_holds_the_printed_fields_plus_the_model_ids_seen(tmp_path):
     out_dir = tmp_path / "out"
-    fake = FakeJev(values=dict(cause="planned", safety_related=0.1))
+    fake = FakeJev(values=dict(names_safety_hazard=0.1, names_physical_damage=0.1, names_routine=0.9, cause="planned", safety_related=0.1))
 
     main(["run", "--sample", "--out", str(out_dir)], ask=fake.ask)
 
@@ -223,7 +223,7 @@ def test_summary_json_holds_the_printed_fields_plus_the_model_ids_seen(tmp_path)
 
 def test_a_run_whose_cache_covers_every_pair_needs_no_key_and_builds_no_jev(tmp_path, monkeypatch):
     out_dir = tmp_path / "out"
-    warm = FakeJev(values=dict(cause="planned", safety_related=0.1))
+    warm = FakeJev(values=dict(names_safety_hazard=0.1, names_physical_damage=0.1, names_routine=0.9, cause="planned", safety_related=0.1))
     main(["run", "--sample", "--out", str(out_dir)], ask=warm.ask)
     assert len(warm.calls) > 0
 
@@ -244,7 +244,7 @@ def test_a_cache_with_a_stale_questions_hash_is_ignored_and_reported(tmp_path, c
         json.dumps({"questions_hash": "not-the-real-hash", "cache": {"Stop": {"whatever": {"cause": {"type": "choice", "value": "fault", "probabilities": {"fault": 1.0}, "confidence": 1.0}}}}}),
         encoding="utf-8",
     )
-    fake = FakeJev(values=dict(cause="planned", safety_related=0.1))
+    fake = FakeJev(values=dict(names_safety_hazard=0.1, names_physical_damage=0.1, names_routine=0.9, cause="planned", safety_related=0.1))
 
     main(["run", "--sample", "--out", str(out_dir)], ask=fake.ask)
 
@@ -261,12 +261,12 @@ def test_a_cache_with_a_stale_questions_hash_is_ignored_and_reported(tmp_path, c
 def test_cache_flag_seeds_from_a_file_without_writing_back_to_it(tmp_path):
     out_dir = tmp_path / "out"
     warm_dir = tmp_path / "warm"
-    warm = FakeJev(values=dict(cause="planned", safety_related=0.1))
+    warm = FakeJev(values=dict(names_safety_hazard=0.1, names_physical_damage=0.1, names_routine=0.9, cause="planned", safety_related=0.1))
     main(["run", "--sample", "--out", str(warm_dir)], ask=warm.ask)
     seed_path = warm_dir / "judgments.json"
     seed_before = seed_path.read_text(encoding="utf-8")
 
-    second = FakeJev(values=dict(cause="planned", safety_related=0.1))
+    second = FakeJev(values=dict(names_safety_hazard=0.1, names_physical_damage=0.1, names_routine=0.9, cause="planned", safety_related=0.1))
     main(["run", "--sample", "--out", str(out_dir), "--cache", str(seed_path)], ask=second.ask)
 
     assert len(second.calls) == 0  # every pair was already in the seed file
@@ -362,8 +362,8 @@ def test_no_context_flag_skips_step2_entirely(tmp_path):
 def test_step2_cache_is_saved_even_when_one_ask_raises(tmp_path):
     out_dir = tmp_path / "out"
     ask = SlowRaisingAsk(
-        step1_values=dict(cause="fault", safety_related=0.5, needs_site_visit=0.1),
-        step2_values=dict(cause="planned", safety_related=0.1),
+        step1_values=dict(names_safety_hazard=0.5),
+        step2_values=dict(names_safety_hazard=0.1, names_physical_damage=0.1, names_routine=0.9, cause="planned", safety_related=0.1),
     )
 
     with pytest.raises(RuntimeError):

@@ -1,12 +1,16 @@
-"""Score Jev's `cause` judgments against the operator's own IEC 61400-26 category.
+"""Score the step-1 derived `cause` (triage.derive_cause) against the operator's own
+IEC 61400-26 category.
 
 The mapping from IEC category to the expected `cause` bucket below is ours, chosen to
-match the four `cause` values `questions/event.yaml` asks Jev to pick between; the IEC
-category itself is the operator's own label, recorded before Jev was ever asked about
-these events. Only non-informational events that carry an IEC category are scored;
-informational events, events with a blank category, and any (status, message) pair not
-present in `cache` (never asked, or asked in a run whose cache was not passed in) are
-silently left out, not counted as wrong.
+match the five `cause` values `cause` can take (triage.PLANNED/EXTERNAL/FAULT/RUNNING/
+UNCLEAR); the IEC category itself is the operator's own label, recorded before Jev was
+ever asked about these events. `unclear` is never a key on the right of IEC_TO_CAUSE, so
+a derived cause of `unclear` always counts as wrong on its own, with no special case
+needed; `causes_unclear` below separately reports how many derivations landed there.
+Only non-informational events that carry an IEC category are scored; informational
+events, events with a blank category, and any (status, message) pair not present in
+`cache` (never asked, or asked in a run whose cache was not passed in) are silently left
+out, not counted as wrong.
 
 `evaluate(events, cache)` works on the same `Cache` shape `triage()` fills: `cache[status]
 [message]` holds the raw judgments dict Jev returned for that pair, so a cache saved to
@@ -28,9 +32,9 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from collections.abc import Sequence
 
-from .judgments import CHOICE_MIN_CONFIDENCE
+from .judgments import Judgments
 from .models import Event
-from .triage import Cache, INFORMATIONAL, MONITOR, TriageResult
+from .triage import Cache, INFORMATIONAL, MONITOR, TriageResult, UNCLEAR, derive_cause
 
 # Forced outage is the operator's label for an unplanned turbine fault; Scheduled
 # Maintenance, Technical Standby and Requested Shutdown are all planned by the operator
@@ -55,11 +59,16 @@ NOTE = (
 )
 
 
-def _cause_judgment(cache: Cache, status: str, message: str) -> dict | None:
+def _derived_cause(cache: Cache, status: str, message: str) -> tuple[str, list[str]] | None:
+    """The step-1 derived cause for this (status, message) pair (triage.derive_cause),
+    plus the ids (if any) its Judgments read marked uncertain while deriving it. None if
+    this pair was never asked (no cache entry) at all."""
     raw = cache.get(status, {}).get(message)
     if raw is None:
         return None
-    return raw.get("cause")
+    j = Judgments(raw)
+    cause = derive_cause(j, status)
+    return cause, list(j.uncertain)
 
 
 def _still_uncertain(result: TriageResult) -> bool:
@@ -71,14 +80,16 @@ def _still_uncertain(result: TriageResult) -> bool:
 
 
 def evaluate(events: Sequence[Event], cache: Cache, results: Sequence[TriageResult] | None = None) -> dict:
-    """Accuracy of Jev's `cause` against the operator's IEC category, counted per event
-    and per distinct (status, message), a confusion matrix, the distinct messages where
-    Jev disagreed (with Jev's probabilities), and how many distinct messages were
-    uncertain (confidence < CHOICE_MIN_CONFIDENCE). See the module docstring for what is
-    included and what is silently skipped, and for what `results` adds."""
+    """Accuracy of the step-1 derived `cause` against the operator's IEC category,
+    counted per event and per distinct (status, message), a confusion matrix (with
+    `unclear` as a column, since it is a value `cause` can take), the distinct messages
+    where the derived cause disagreed (with the ids, if any, its derivation found
+    uncertain), and how many distinct messages derived to `unclear`. See the module
+    docstring for what is included and what is silently skipped, and for what `results`
+    adds."""
     per_event: list[tuple[str, str]] = []  # (expected, got), one per scored event
     expected_by_pair: dict[tuple[str, str], list[str]] = defaultdict(list)
-    cause_by_pair: dict[tuple[str, str], dict] = {}
+    cause_by_pair: dict[tuple[str, str], tuple[str, list[str]]] = {}
 
     with_context_pairs: list[tuple[str, str]] = []  # (expected, got), step1+step2 cause
     escalated_evaluated = 0
@@ -101,15 +112,15 @@ def evaluate(events: Sequence[Event], cache: Cache, results: Sequence[TriageResu
         expected = IEC_TO_CAUSE.get(event.iec_category) if event.iec_category else None
         if expected is None:
             continue
-        cause = _cause_judgment(cache, event.status, event.message)
-        if cause is None:
+        derived = _derived_cause(cache, event.status, event.message)
+        if derived is None:
             continue
 
-        got = cause["value"]
+        got, _uncertain_ids = derived
         per_event.append((expected, got))
         key = (event.status, event.message)
         expected_by_pair[key].append(expected)
-        cause_by_pair[key] = cause
+        cause_by_pair[key] = derived
 
         escalated = result is not None and result.step1_triage is not None
         step2_cause = None
@@ -141,7 +152,7 @@ def evaluate(events: Sequence[Event], cache: Cache, results: Sequence[TriageResu
     message_results: dict[tuple[str, str], tuple[str, str]] = {}
     for key, expecteds in expected_by_pair.items():
         expected = Counter(expecteds).most_common(1)[0][0]
-        got = cause_by_pair[key]["value"]
+        got = cause_by_pair[key][0]
         message_results[key] = (expected, got)
 
     messages_correct = sum(1 for expected, got in message_results.values() if expected == got)
@@ -157,20 +168,22 @@ def evaluate(events: Sequence[Event], cache: Cache, results: Sequence[TriageResu
             "message": message,
             "expected": expected,
             "got": got,
-            "probabilities": cause_by_pair[(status, message)].get("probabilities", {}),
+            "uncertain": cause_by_pair[(status, message)][1],
         }
         for (status, message), (expected, got) in sorted(message_results.items())
         if expected != got
     ]
 
-    uncertain_messages_evaluated = sum(
-        1 for key in message_results if cause_by_pair[key].get("confidence", 1.0) < CHOICE_MIN_CONFIDENCE
-    )
-    uncertain_messages_asked = sum(
+    # How many step-1 causes were unclear: among the IEC-scored pairs above
+    # (...evaluated), and among every distinct pair ever asked, scored or not
+    # (...asked), the same "evaluated vs. asked" split accuracy_by_message/cache uses
+    # elsewhere in this module.
+    causes_unclear_evaluated = sum(1 for key in message_results if cause_by_pair[key][0] == UNCLEAR)
+    causes_unclear_asked = sum(
         1
-        for messages in cache.values()
-        for raw in messages.values()
-        if raw.get("cause", {}).get("confidence", 1.0) < CHOICE_MIN_CONFIDENCE
+        for status, messages in cache.items()
+        for message, raw in messages.items()
+        if derive_cause(Judgments(raw), status) == UNCLEAR
     )
 
     return {
@@ -214,10 +227,13 @@ def evaluate(events: Sequence[Event], cache: Cache, results: Sequence[TriageResu
         "triage_counts_after_context": dict(triage_counts_after),
         "confusion_matrix": {expected: dict(got_counts) for expected, got_counts in confusion.items()},
         "disagreements": disagreements,
-        # ...evaluated: distinct messages IEC-scored above with a low-confidence cause read.
-        # ...asked: the same count over every distinct pair in `cache`, scored or not, so it
-        # also covers messages with no IEC category at all (e.g. most of the 98 distinct
-        # pairs in a full 2016 run, only 61 of which carry a category).
-        "uncertain_messages_evaluated": uncertain_messages_evaluated,
-        "uncertain_messages_asked": uncertain_messages_asked,
+        # ...evaluated: distinct messages IEC-scored above whose derived cause is
+        # `unclear` (always wrong, see the module docstring).
+        # ...asked: the same count over every distinct pair in `cache`, scored or not, so
+        # it also covers messages with no IEC category at all (e.g. most of the 98
+        # distinct pairs in a full 2016 run, only 61 of which carry a category).
+        "causes_unclear": {
+            "evaluated": causes_unclear_evaluated,
+            "asked": causes_unclear_asked,
+        },
     }
