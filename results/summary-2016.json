@@ -1,0 +1,47 @@
+{
+  "counts": {
+    "act_now": 69,
+    "monitor": 1341,
+    "no_action": 12609
+  },
+  "top_act_now_messages": [
+    [
+      "Oscillation encoder tower",
+      17
+    ],
+    [
+      "Safety chain open",
+      14
+    ],
+    [
+      "High rotor speed nacelle",
+      8
+    ],
+    [
+      "Tower oscillation X level 2",
+      6
+    ],
+    [
+      "Emergency stop base box",
+      5
+    ]
+  ],
+  "accuracy_by_event": {
+    "correct": 717,
+    "total": 959,
+    "accuracy": 0.7476538060479666
+  },
+  "accuracy_by_message": {
+    "correct": 48,
+    "total": 61,
+    "accuracy": 0.7868852459016393
+  },
+  "jev_calls": 98,
+  "input_tokens": 57867,
+  "cost_usd": 0.002430414,
+  "wall_seconds": 28.619874000083655,
+  "model_ids": [
+    "jev-1.13.0"
+  ],
+  "cache_ignored": false
+}

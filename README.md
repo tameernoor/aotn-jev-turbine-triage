@@ -188,14 +188,17 @@ and it is left as is rather than second-guessed.
 
 ## Measured
 
-One run against `jev-1.13.0` over all of 2016 for the six turbines. The question
-wording was committed before this run and not changed after it.
+One run against `jev-1.13.0` over all of 2016 for the six turbines, with an empty
+cache. The question wording was committed before any run and not changed after it.
+The answers from this run are in `results/judgments-2016.json` and the usage in
+`results/summary-2016.json`, so the numbers below can be reproduced without calling
+Jev.
 
 ### Speed and cost
 
 - 14,019 events, 98 distinct kinds of non-informational event, so 98 Jev requests
   (one per kind, all three questions in each). Informational events never go to Jev.
-- 28 seconds for the whole year, with the requests sent one after another. 57,867
+- 29 seconds for the whole year, with the requests sent one after another. 57,867
   input tokens, $0.0024 in total.
 
 ### Cause, against the operator's own category
@@ -203,8 +206,9 @@ wording was committed before this run and not changed after it.
 959 non-informational events carry the operator's IEC 61400-26 category. Mapped to
 `cause` with the table above:
 
-- Jev agreed with the operator on 709 of 959 events (74 %), and on 47 of 61 distinct
-  messages (77 %).
+- Jev agreed with the operator on 717 of 959 events (75 %), and on 48 of 61 distinct
+  messages (79 %). An earlier run with the same wording gave 709 of 959: answers
+  near a boundary move a little between runs.
 - `planned` 508 of 508 and `external` 48 of 48 agreed. The disagreements are all on
   `fault` and `running`.
 - Where they disagree, it is often the question rather than the reading. "Maximum
@@ -214,19 +218,20 @@ wording was committed before this run and not changed after it.
   so Jev says fault, while the operator books them as full performance because the
   turbine kept producing. `cause` mixes why something happened with whether the
   turbine is running, and these rows show it.
-- Jev was genuinely split on a few: "High rotor speed nacelle" 0.49 fault and 0.49
-  external, "WEC shut down" 0.43 planned and 0.40 fault.
+- Jev was genuinely split on a few: "WEC shut down" 0.48 planned and 0.38 fault,
+  "No speed development" 0.49 external and 0.42 fault. Its `cause` read was below
+  0.6 confidence on 12 of the 61 scored messages (23 of all 98 asked).
 
 ### Triage
 
 - 69 events went to act now (the top ones: "Oscillation encoder tower", "Safety
   chain open", "High rotor speed nacelle", "Tower oscillation X level 2", "Emergency
-  stop base box"), 1,457 to monitor, 12,493 to no action.
-- Most of the monitor pile is uncertainty, not faults. For "Battery test" Jev put
-  `safety_related` at 0.22, just above the 0.2 that counts as no, which alone sends
-  258 routine tests to monitor. `needs_site_visit` sat between 0.3 and 0.6 for most
-  messages: from three or four words of vendor text, whether someone has to drive
-  out is often not knowable, and Jev says so.
+  stop base box"), 1,341 to monitor, 12,609 to no action.
+- Most of the monitor pile is uncertainty, not faults: 1,200 of the 1,341. For
+  "Battery test" Jev put `safety_related` at 0.25, just above the 0.2 that counts
+  as no, which alone sends 258 routine tests to monitor. `needs_site_visit` sat
+  between 0.3 and 0.6 for 62 of the 98 messages: from three or four words of vendor
+  text, whether someone has to drive out is often not knowable, and Jev says so.
 - 124 informational events went to monitor for chattering alone.
 
 What this shows: a narrow question works when the text carries the answer (planned,
