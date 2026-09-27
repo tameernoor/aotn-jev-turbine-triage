@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
-"""Builds data/sample/ from data/raw/: two Status CSVs, Kelmarsh 1 and Kelmarsh 6,
+"""Builds data/sample/ from data/raw/: three Status CSVs, Kelmarsh 1, 2 and 6,
 restricted to a hand-picked set of real 2016 time windows.
 
 The windows were chosen (see docs/plan.md Task 1) by inspecting the real data for
 messages that start 3 or more times within 10 minutes on one turbine (chattering),
 Stops lasting over 24 hours (long stops), and a window where the whole farm crosses
-the "more than 10 non-informational events within 10 minutes" flood threshold. Run
-this after scripts/fetch_kelmarsh.py has populated data/raw/. Prints what it kept.
+the "more than 10 non-informational events within 10 minutes" flood threshold. That
+threshold needs contributions from more than 2 turbines during the 2016-03-01 grid
+event: Kelmarsh 1 and 6 alone reach only 8 non-informational events in any single
+10-minute window there, so Kelmarsh 2's real events for that same hour are included
+too (it was the smallest addition that pushes a window over 10; Kelmarsh 4 would
+also have worked). Run this after scripts/fetch_kelmarsh.py has populated
+data/raw/. Prints what it kept.
 """
 
 from __future__ import annotations
@@ -38,6 +43,9 @@ WINDOWS: dict[int, list[tuple[str, str, str]]] = {
         ("Data communication unavailable", "2016-08-17 00:30:00", "2016-08-17 01:30:00"),
         ("Data communication unavailable", "2016-09-01 07:00:00", "2016-09-01 08:30:00"),
         ("Park master stop long stop", "2016-10-31 06:00:00", "2016-10-31 10:00:00"),
+    ],
+    2: [
+        ("farm-wide flood window (grid event), tips it over the flood threshold", "2016-03-01 17:00:00", "2016-03-01 18:00:00"),
     ],
     6: [
         ("Safety chain open long stop", "2016-02-07 08:00:00", "2016-02-07 14:00:00"),
@@ -89,7 +97,7 @@ def build(turbine_number: int) -> tuple[int, dict[str, int]]:
 
 if __name__ == "__main__":
     total = 0
-    for n in (1, 6):
+    for n in (1, 2, 6):
         count, status_counts = build(n)
         total += count
         print(f"Kelmarsh {n}: kept {count} events across {len(WINDOWS[n])} windows -> {status_counts}")

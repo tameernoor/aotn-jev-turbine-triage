@@ -1,15 +1,19 @@
 """Loads Kelmarsh Status CSVs into Event records.
 
-Each file starts with `#` comment lines (including `# Turbine: <name>`), then a header
-row `Timestamp start,Timestamp end,Duration,Status,Code,Message,Comment,Service
-contract category,IEC category`. Durations look like `211:08:29` (hours can exceed
-24). `Timestamp end` and `Duration` are `-` for events with no recorded end.
+Each file starts with `#` comment lines (including `# Turbine: <name>` and `# Time
+zone: UTC`), then a header row `Timestamp start,Timestamp end,Duration,Status,Code,
+Message,Comment,Service contract category,IEC category`. Durations look like
+`211:08:29` (hours can exceed 24). `Timestamp end` and `Duration` are `-` for events
+with no recorded end; one real row has a negative duration (its end is earlier than
+its start), which is treated the same as missing. Timestamps in the source files
+are naive, but the header states they are UTC, so this loader attaches UTC directly
+rather than leaving them ambiguous.
 """
 
 from __future__ import annotations
 
 import csv
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .models import Event
@@ -49,7 +53,7 @@ def _load_row(turbine: str, row: dict[str, str], path: Path) -> Event:
     try:
         return Event(
             turbine=turbine,
-            start=datetime.strptime(row["Timestamp start"], TIMESTAMP_FORMAT),
+            start=datetime.strptime(row["Timestamp start"], TIMESTAMP_FORMAT).replace(tzinfo=timezone.utc),
             end=_parse_timestamp(row["Timestamp end"]),
             duration_seconds=_parse_duration(row["Duration"]),
             status=row["Status"],
@@ -62,11 +66,14 @@ def _load_row(turbine: str, row: dict[str, str], path: Path) -> Event:
 
 
 def _parse_timestamp(value: str) -> datetime | None:
-    return None if value == "-" else datetime.strptime(value, TIMESTAMP_FORMAT)
+    if value == "-":
+        return None
+    return datetime.strptime(value, TIMESTAMP_FORMAT).replace(tzinfo=timezone.utc)
 
 
 def _parse_duration(value: str) -> float | None:
     if value == "-":
         return None
     hours, minutes, seconds = (int(part) for part in value.split(":"))
-    return timedelta(hours=hours, minutes=minutes, seconds=seconds).total_seconds()
+    total = timedelta(hours=hours, minutes=minutes, seconds=seconds).total_seconds()
+    return None if total < 0 else total

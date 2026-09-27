@@ -100,6 +100,17 @@ def test_flood_ignores_informational_events():
     assert floods(events) == set()
 
 
+def test_eleventh_event_pinned_exactly_ten_minutes_after_the_first_is_not_a_flood():
+    # The window anchored at the first event only reaches starts strictly before
+    # first + 10:00, so pinning the 11th event exactly at that mark keeps every
+    # window at 10, not 11: not a flood.
+    events = _non_info_run(10, start=T0, step=timedelta(seconds=1)) + [
+        ev(status="Warning", start=T0 + timedelta(minutes=10), message="eleventh")
+    ]
+
+    assert floods(events) == set()
+
+
 def test_flood_counts_across_turbines():
     events = [
         ev(turbine="Kelmarsh 1", status="Warning", start=T0 + i * timedelta(seconds=10), message=f"m{i}")

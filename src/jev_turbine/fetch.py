@@ -1,15 +1,17 @@
 """Gets the Kelmarsh 2016 Status CSVs into data/raw/.
 
 Prefers a local copy over downloading: files already in `raw_dir`, then a local
-directory that already holds the extracted CSVs, then a local zip copy, and only
-then Zenodo record 16807551 (`Kelmarsh_SCADA_2016_3082.zip`). Only the `Status_*.csv`
-members of the zip are kept; the rest of the archive (turbine, met mast and power
-curve files) is discarded.
+mirror directory (see `_resolve_local_dirs`) that already holds the extracted CSVs,
+then a local zip copy in that directory, and only then Zenodo record 16807551
+(`Kelmarsh_SCADA_2016_3082.zip`). Only the `Status_*.csv` members of the zip are
+kept; the rest of the archive (turbine, met mast and power curve files) is
+discarded.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import urllib.request
 import zipfile
@@ -19,15 +21,7 @@ TURBINE_COUNT = 6
 ZENODO_RECORD_ID = "16807551"
 ZENODO_FILENAME = "Kelmarsh_SCADA_2016_3082.zip"
 ZENODO_API_URL = f"https://zenodo.org/api/records/{ZENODO_RECORD_ID}"
-
-# A local mirror used while building this project. Harmless if it is not present:
-# fetch_kelmarsh() just falls through to the next source.
-KNOWN_LOCAL_DIRS = [
-    Path(
-        "/private/tmp/claude-501/-Users-lars-Documents-litlabs/"
-        "77927f31-b13c-4ffb-96f0-f276fd23ff0c/scratchpad/kelmarsh"
-    ),
-]
+LOCAL_DIR_ENV_VAR = "KELMARSH_LOCAL_DIR"
 
 
 class FetchError(RuntimeError):
@@ -38,10 +32,13 @@ def fetch_kelmarsh(raw_dir: Path, local_dirs: list[Path] | None = None) -> list[
     """Populate `raw_dir` with the Kelmarsh 2016 Status CSVs and return their paths.
 
     Idempotent: if `raw_dir` already holds all six files, nothing else is touched.
+    `local_dirs` defaults to the directory named by the `KELMARSH_LOCAL_DIR`
+    environment variable, if set, else no local directory is tried and this
+    downloads from Zenodo.
     """
     raw_dir = Path(raw_dir)
     raw_dir.mkdir(parents=True, exist_ok=True)
-    sources = KNOWN_LOCAL_DIRS if local_dirs is None else local_dirs
+    sources = _resolve_local_dirs() if local_dirs is None else local_dirs
 
     existing = _status_csvs(raw_dir)
     if len(existing) >= TURBINE_COUNT:
@@ -49,6 +46,12 @@ def fetch_kelmarsh(raw_dir: Path, local_dirs: list[Path] | None = None) -> list[
 
     for source in sources:
         found = _status_csvs(source)
+        if found and len(found) < TURBINE_COUNT:
+            raise FetchError(
+                f"{source} has {len(found)} Status CSV(s), expected {TURBINE_COUNT}. "
+                "Point --from (or KELMARSH_LOCAL_DIR) at a complete local copy, or "
+                "remove the incomplete one so this falls through to downloading."
+            )
         if found:
             return _copy_csvs(found, raw_dir)
 
@@ -60,6 +63,11 @@ def fetch_kelmarsh(raw_dir: Path, local_dirs: list[Path] | None = None) -> list[
     zip_path = raw_dir / ZENODO_FILENAME
     _download(zip_path)
     return _extract_status_csvs(zip_path, raw_dir)
+
+
+def _resolve_local_dirs() -> list[Path]:
+    value = os.environ.get(LOCAL_DIR_ENV_VAR)
+    return [Path(value)] if value else []
 
 
 def _status_csvs(folder: Path) -> list[Path]:

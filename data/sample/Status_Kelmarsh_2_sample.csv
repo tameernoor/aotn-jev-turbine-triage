@@ -1,0 +1,23 @@
+# This file was exported by Greenbyte at 2022-01-27 11:10:10. Please see https://www.greenbyte.com for more information about Greenbyte.
+#
+# Turbine: Kelmarsh 2
+# Turbine type: Senvion MM92 (Senvion MM92 kW)
+# Time zone: UTC
+# Time interval: 2016-01-01 00:00:00 - 2017-01-01 00:00:00 (366 days)
+#
+# Kelmarsh 2 Sum production: 5004479 kWh
+#
+Timestamp start,Timestamp end,Duration,Status,Code,Message,Comment,Service contract category,IEC category
+2016-03-01 17:27:46,2016-03-01 17:30:03,00:02:17,Informational,0,System OK,,System OK (32),Full Performance
+2016-03-01 17:30:03,2016-03-01 17:40:03,00:10:00,Warning,5720,Brake accumulator defect,,Warnings (27),
+2016-03-01 17:30:03,2016-03-01 17:32:03,00:02:00,Stop,3000,Frequency converter not ready,,Generator and Converter errors (20),Forced outage
+2016-03-01 17:34:04,2016-03-01 17:36:04,00:02:00,Stop,3000,Frequency converter not ready,,Generator and Converter errors (20),Forced outage
+2016-03-01 17:38:11,2016-03-01 17:40:11,00:02:00,Stop,3000,Frequency converter not ready,,Generator and Converter errors (20),Forced outage
+2016-03-01 17:40:11,2016-03-01 17:42:14,00:02:03,Informational,0,System OK,,System OK (32),Full Performance
+2016-03-01 17:42:14,2016-03-01 17:46:53,00:04:39,Stop,455,Repeating error BP52,,Repeated error  (25),Forced outage
+2016-03-01 17:42:14,2016-03-01 17:46:53,00:04:39,Warning,5720,Brake accumulator defect,,Warnings (27),
+2016-03-01 17:46:53,2016-03-01 17:49:20,00:02:27,Informational,0,System OK,,System OK (32),Full Performance
+2016-03-01 17:49:20,2016-03-01 17:59:20,00:10:00,Warning,5720,Brake accumulator defect,,Warnings (27),
+2016-03-01 17:49:20,2016-03-01 17:51:20,00:02:00,Stop,3000,Frequency converter not ready,,Generator and Converter errors (20),Forced outage
+2016-03-01 17:53:22,2016-03-01 17:55:22,00:02:00,Stop,3000,Frequency converter not ready,,Generator and Converter errors (20),Forced outage
+2016-03-01 17:59:20,2016-03-03 11:17:41,41:18:21,Informational,0,System OK,,System OK (32),Full Performance

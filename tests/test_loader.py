@@ -1,4 +1,7 @@
+from datetime import datetime, timezone
 from pathlib import Path
+
+import pytest
 
 from jev_turbine.loader import LoadError, load_events
 
@@ -55,6 +58,22 @@ def test_hours_can_exceed_24_in_duration(tmp_path):
     assert events[0].duration_seconds == 760109.0
 
 
+def test_timestamps_are_utc(tmp_path):
+    _write(
+        tmp_path / "Status_Kelmarsh_1_2016.csv",
+        "Kelmarsh 1",
+        ["2016-01-14 19:28:03,2016-01-23 14:36:32,211:08:29,Stop,111,X,,,\n"],
+    )
+
+    events = load_events(tmp_path)
+    event = events[0]
+
+    assert event.start == datetime(2016, 1, 14, 19, 28, 3, tzinfo=timezone.utc)
+    assert event.start.tzinfo == timezone.utc
+    assert event.end == datetime(2016, 1, 23, 14, 36, 32, tzinfo=timezone.utc)
+    assert event.end.tzinfo == timezone.utc
+
+
 def test_dash_end_and_duration_and_blank_iec_become_none(tmp_path):
     _write(
         tmp_path / "Status_Kelmarsh_1_2016.csv",
@@ -67,6 +86,24 @@ def test_dash_end_and_duration_and_blank_iec_become_none(tmp_path):
     assert events[0].end is None
     assert events[0].duration_seconds is None
     assert events[0].iec_category is None
+
+
+def test_negative_duration_becomes_none(tmp_path):
+    # Real row: Kelmarsh 2, 2016-10-10 13:43:49, end earlier than start.
+    _write(
+        tmp_path / "Status_Kelmarsh_2_2016.csv",
+        "Kelmarsh 2",
+        [
+            "2016-10-10 13:43:49,2016-10-10 13:07:00,-01:-36:-49,Stop,20,"
+            "Manual stop - on site,,Manual stop (service)  (9),Scheduled Maintenance\n"
+        ],
+    )
+
+    events = load_events(tmp_path)
+
+    assert events[0].duration_seconds is None
+    # The (bad) end timestamp itself still parses; only the derived duration is dropped.
+    assert events[0].end == datetime(2016, 10, 10, 13, 7, 0, tzinfo=timezone.utc)
 
 
 def test_loads_and_sorts_across_multiple_files_by_start(tmp_path):
@@ -111,8 +148,5 @@ def test_missing_turbine_header_raises_load_error(tmp_path):
         encoding="utf-8",
     )
 
-    try:
+    with pytest.raises(LoadError):
         load_events(tmp_path)
-        assert False, "expected LoadError"
-    except LoadError:
-        pass

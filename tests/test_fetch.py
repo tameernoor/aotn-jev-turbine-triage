@@ -122,3 +122,35 @@ def test_fetch_reaches_the_download_path_without_a_local_source_but_does_not_dow
 
     with pytest.raises(OSError):
         fetch_kelmarsh(tmp_path / "raw", local_dirs=[tmp_path / "does-not-exist"])
+
+
+def test_uses_kelmarsh_local_dir_env_var_when_local_dirs_is_not_given(tmp_path, monkeypatch):
+    source = tmp_path / "source"
+    _make_source_csvs(source)
+    monkeypatch.setenv(fetch_module.LOCAL_DIR_ENV_VAR, str(source))
+
+    result = fetch_kelmarsh(tmp_path / "raw")
+
+    assert len(result) == 6
+
+
+def test_no_env_var_and_no_local_dirs_reaches_the_download_path(tmp_path, monkeypatch):
+    monkeypatch.delenv(fetch_module.LOCAL_DIR_ENV_VAR, raising=False)
+
+    def no_network(*args, **kwargs):
+        raise OSError("tests must not perform a real download")
+
+    monkeypatch.setattr(fetch_module.urllib.request, "urlopen", no_network)
+
+    with pytest.raises(OSError):
+        fetch_kelmarsh(tmp_path / "raw")
+
+
+def test_incomplete_local_mirror_raises_a_clear_error(tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+    for name in STATUS_NAMES[:3]:
+        (source / name).write_text("data\n", encoding="utf-8")
+
+    with pytest.raises(fetch_module.FetchError, match="3 Status CSV"):
+        fetch_kelmarsh(tmp_path / "raw", local_dirs=[source])
