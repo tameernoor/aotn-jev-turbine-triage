@@ -9,13 +9,33 @@ Source: Kelmarsh wind farm data, Cubico Sustainable Investments, Zenodo record
 
 ## What is in here
 
-Three files, one per turbine, in the same format as the original Status CSVs (the
-same `#` comment header, then `Timestamp start,Timestamp end,Duration,Status,Code,
-Message,Comment,Service contract category,IEC category`):
+Six files, two per turbine (Status events and 10-minute measurements), in the same
+format as the originals.
+
+The Status files keep the same `#` comment header, then `Timestamp start,Timestamp
+end,Duration,Status,Code,Message,Comment,Service contract category,IEC category`:
 
 - `Status_Kelmarsh_1_sample.csv`: 155 events
 - `Status_Kelmarsh_2_sample.csv`: 13 events (one hour only, see the flood below)
 - `Status_Kelmarsh_6_sample.csv`: 125 events
+
+The Turbine_Data files keep the same `#` comment header (so the same loader reads
+them), but only five columns: `Power (kW)`, `Wind speed (m/s)`, `Rotor speed
+(RPM)`, `Grid frequency (Hz)` and `Grid voltage (V)`, the only 10-minute columns
+the context builder (`context.py`) is allowed to use. Every other column
+(production-loss, availability, curtailment and the operator's own IEC
+classification) is dropped. Each file covers its turbine's Status sample events,
+plus 7 days before the earliest and 1 day after the latest, unless that span was
+too large to keep the file small; Kelmarsh 1 and 6's Status events are spread
+across most of the year, so those two instead cover only the 1 day either side of
+each non-informational sample event:
+
+- `Turbine_Data_Kelmarsh_1_sample.csv`: 4,226 rows, 13 windows around
+  non-informational events
+- `Turbine_Data_Kelmarsh_2_sample.csv`: 1,155 rows, full span (its Status sample
+  is one hour only)
+- `Turbine_Data_Kelmarsh_6_sample.csv`: 3,791 rows, 12 windows around
+  non-informational events
 
 All are restricted to a set of real 2016 time windows, chosen so the sample
 includes:
@@ -35,5 +55,7 @@ includes:
   hour are included too. With all three turbines, running the flood check
   against this sample does flag a real flood window.
 
-Built by `scripts/build_sample.py` from `data/raw/`; see that script for the exact
-windows and why each one was picked.
+The Status files are built by `scripts/build_sample.py` from `data/raw/`; see that
+script for the exact windows and why each one was picked. The Turbine_Data files
+were built once, directly from `data/raw/` and the Status samples above, by the
+window rule described here; there is no separate committed script for that step.

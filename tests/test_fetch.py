@@ -9,11 +9,18 @@ from jev_turbine import fetch as fetch_module
 from jev_turbine.fetch import fetch_kelmarsh
 
 STATUS_NAMES = [f"Status_Kelmarsh_{n}_2016.csv" for n in range(1, 7)]
+TURBINE_DATA_NAMES = [f"Turbine_Data_Kelmarsh_{n}_2016.csv" for n in range(1, 7)]
 
 
 def _make_source_csvs(dir_path: Path) -> None:
     dir_path.mkdir(parents=True, exist_ok=True)
     for name in STATUS_NAMES:
+        (dir_path / name).write_text(f"# Turbine: {name}\ndata\n", encoding="utf-8")
+
+
+def _make_source_turbine_data_csvs(dir_path: Path) -> None:
+    dir_path.mkdir(parents=True, exist_ok=True)
+    for name in TURBINE_DATA_NAMES:
         (dir_path / name).write_text(f"# Turbine: {name}\ndata\n", encoding="utf-8")
 
 
@@ -154,3 +161,102 @@ def test_incomplete_local_mirror_raises_a_clear_error(tmp_path):
 
     with pytest.raises(fetch_module.FetchError, match="3 Status CSV"):
         fetch_kelmarsh(tmp_path / "raw", local_dirs=[source])
+
+
+# --- Turbine_Data (10-minute measurements) -----------------------------------------
+
+
+def test_turbine_data_csvs_are_copied_from_a_local_directory_alongside_status(tmp_path):
+    source = tmp_path / "source"
+    _make_source_csvs(source)
+    _make_source_turbine_data_csvs(source)
+    raw = tmp_path / "raw"
+
+    fetch_kelmarsh(raw, local_dirs=[source])
+
+    for name in TURBINE_DATA_NAMES:
+        assert (raw / name).exists()
+        assert (raw / name).read_text(encoding="utf-8") == (source / name).read_text(encoding="utf-8")
+
+
+def test_turbine_data_is_left_alone_when_the_source_only_has_status_csvs(tmp_path):
+    source = tmp_path / "source"
+    _make_source_csvs(source)
+    raw = tmp_path / "raw"
+
+    fetch_kelmarsh(raw, local_dirs=[source])
+
+    assert list(raw.glob("Turbine_Data_Kelmarsh_*.csv")) == []
+
+
+def test_incomplete_turbine_data_in_a_local_directory_is_not_copied(tmp_path):
+    source = tmp_path / "source"
+    _make_source_csvs(source)
+    source.mkdir(exist_ok=True)
+    for name in TURBINE_DATA_NAMES[:2]:
+        (source / name).write_text("data\n", encoding="utf-8")
+    raw = tmp_path / "raw"
+
+    fetch_kelmarsh(raw, local_dirs=[source])
+
+    # Falls through rather than copying a partial set (no zip to complete it from).
+    assert list(raw.glob("Turbine_Data_Kelmarsh_*.csv")) == []
+
+
+def test_turbine_data_csvs_are_extracted_from_a_local_zip_alongside_status(tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+    zip_path = source / fetch_module.ZENODO_FILENAME
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        for name in STATUS_NAMES:
+            zf.writestr(name, f"# Turbine: {name}\ndata\n")
+        for name in TURBINE_DATA_NAMES:
+            zf.writestr(name, f"# Turbine: {name}\n10-minute data\n")
+        zf.writestr("Metmast_Kelmarsh_2016.csv", "not a status or turbine data file\n")
+
+    raw = tmp_path / "raw"
+    fetch_kelmarsh(raw, local_dirs=[source])
+
+    for name in TURBINE_DATA_NAMES:
+        assert (raw / name).read_text(encoding="utf-8") == f"# Turbine: {name}\n10-minute data\n"
+    assert not (raw / "Metmast_Kelmarsh_2016.csv").exists()
+
+
+def test_turbine_data_is_extracted_from_the_zip_already_downloaded_for_status(tmp_path, monkeypatch):
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    zip_path = raw / fetch_module.ZENODO_FILENAME
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        for name in STATUS_NAMES:
+            zf.writestr(name, f"# Turbine: {name}\ndata\n")
+        for name in TURBINE_DATA_NAMES:
+            zf.writestr(name, f"# Turbine: {name}\n10-minute data\n")
+
+    def boom(*args, **kwargs):
+        raise AssertionError("should not touch the network: a zip is already in raw_dir")
+
+    monkeypatch.setattr(fetch_module.urllib.request, "urlopen", boom)
+
+    # Simulate a prior run that already extracted Status but left the zip behind, and
+    # left Turbine_Data unfetched (as an older version of this module would have).
+    fetch_module._extract_status_csvs(zip_path, raw)
+
+    fetch_kelmarsh(raw, local_dirs=[tmp_path / "does-not-exist"])
+
+    for name in TURBINE_DATA_NAMES:
+        assert (raw / name).exists()
+
+
+def test_turbine_data_fetch_is_a_noop_when_raw_dir_already_has_all_six(tmp_path, monkeypatch):
+    raw = tmp_path / "raw"
+    _make_source_csvs(raw)
+    _make_source_turbine_data_csvs(raw)
+
+    def boom(*args, **kwargs):
+        raise AssertionError("should not touch the network when raw_dir is already populated")
+
+    monkeypatch.setattr(fetch_module.urllib.request, "urlopen", boom)
+
+    fetch_kelmarsh(raw, local_dirs=[tmp_path / "does-not-exist"])
+
+    assert len(list(raw.glob("Turbine_Data_Kelmarsh_*.csv"))) == 6

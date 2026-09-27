@@ -3,7 +3,9 @@
 from pathlib import Path
 
 from jev_turbine.checks import chattering, floods, long_stops
+from jev_turbine.context import build_context
 from jev_turbine.loader import load_events
+from jev_turbine.measurements import ALLOWED_COLUMNS, load_measurements
 
 SAMPLE_DIR = Path(__file__).resolve().parent.parent / "data" / "sample"
 
@@ -54,3 +56,32 @@ def test_sample_has_a_real_flood_window():
     # The 2016-03-01 grid event is the only window dense enough in this sample;
     # it should involve more than one turbine.
     assert len({events[i].turbine for i in flagged}) > 1
+
+
+def test_sample_measurements_load_and_cover_all_three_turbines_with_allowed_columns_only():
+    by_turbine = load_measurements(SAMPLE_DIR)
+
+    assert set(by_turbine) == {1, 2, 6}
+    for rows in by_turbine.values():
+        assert len(rows) > 0
+        for row in rows:
+            assert set(row.values) == set(ALLOWED_COLUMNS)
+        # Time sorted, as measurements.load_measurements promises.
+        assert [r.timestamp for r in rows] == sorted(r.timestamp for r in rows)
+
+
+def test_sample_measurements_are_under_the_one_megabyte_target():
+    for n in (1, 2, 6):
+        [path] = SAMPLE_DIR.glob(f"Turbine_Data_Kelmarsh_{n}_sample.csv")
+        assert path.stat().st_size < 1_000_000
+
+
+def test_sample_measurements_build_real_context_for_a_sample_event():
+    events = load_events(SAMPLE_DIR)
+    by_turbine = load_measurements(SAMPLE_DIR)
+    stop = next(e for e in events if e.turbine == "Kelmarsh 1" and e.status == "Stop")
+
+    context = build_context(stop, by_turbine[1], events)
+
+    assert context
+    assert "previous 7 days" in context
