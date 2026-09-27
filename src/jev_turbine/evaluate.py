@@ -1,16 +1,9 @@
 """Score the step-1 derived `cause` (triage.derive_cause) against the operator's own
-IEC 61400-26 category.
-
-The mapping from IEC category to the expected `cause` bucket below is ours, chosen to
-match the five `cause` values `cause` can take (triage.PLANNED/EXTERNAL/FAULT/RUNNING/
-UNCLEAR); the IEC category itself is the operator's own label, recorded before Jev was
-ever asked about these events. `unclear` is never a key on the right of IEC_TO_CAUSE, so
-a derived cause of `unclear` always counts as wrong on its own, with no special case
-needed; `causes_unclear` below separately reports how many derivations landed there.
-Only non-informational events that carry an IEC category are scored; informational
-events, events with a blank category, and any (status, message) pair not present in
-`cache` (never asked, or asked in a run whose cache was not passed in) are silently left
-out, not counted as wrong.
+IEC 61400-26 category, using the IEC_TO_CAUSE mapping below (ours, not the operator's).
+`unclear` is never a value in that mapping, so a derived cause of `unclear` always
+counts as wrong on its own; `causes_unclear` separately reports how many landed there.
+Only non-informational events with both an IEC category and a cache entry are scored;
+everything else is silently left out, not counted as wrong.
 
 `evaluate(events, cache)` works on the same `Cache` shape `triage()` fills: `cache[status]
 [message]` holds the raw judgments dict Jev returned for that pair, so a cache saved to
@@ -116,7 +109,7 @@ def evaluate(events: Sequence[Event], cache: Cache, results: Sequence[TriageResu
         if derived is None:
             continue
 
-        got, _uncertain_ids = derived
+        got = derived[0]
         per_event.append((expected, got))
         key = (event.status, event.message)
         expected_by_pair[key].append(expected)

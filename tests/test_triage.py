@@ -97,6 +97,16 @@ def test_derive_cause_uncertain_turbine_problem_is_unclear():
     assert j.uncertain == ["names_turbine_problem"]
 
 
+def test_derive_cause_uncertain_turbine_problem_on_a_warning_event_is_still_unclear_not_running():
+    # names_turbine_problem is the last question in the chain, so a mutant that drops
+    # the "stop on uncertain" check for it would fall through to the same
+    # RUNNING-if-Warning-else-UNCLEAR fallback a confident no does. A Stop event can't
+    # tell the two apart (both give UNCLEAR); only Warning can.
+    j = Judgments(answers(names_routine=NO, names_outside_condition=NO, names_turbine_problem=BETWEEN))
+    assert derive_cause(j, status="Warning") == UNCLEAR
+    assert j.uncertain == ["names_turbine_problem"]
+
+
 def test_derive_cause_stops_at_first_decision_a_confident_yes_never_reads_later_questions():
     j = Judgments(answers(names_routine=YES, names_outside_condition=BETWEEN, names_turbine_problem=BETWEEN))
     assert derive_cause(j, status="Stop") == PLANNED

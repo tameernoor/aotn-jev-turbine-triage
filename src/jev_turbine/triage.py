@@ -1,13 +1,12 @@
 """Triage the event stream: Jev answers five literal yes/no questions per distinct
-(status, message) pair (questions/event.yaml), plain code derives `cause` from three of
-them and decides act_now / monitor / no_action from all five plus the code checks in
+(status, message) pair (questions/event.yaml); code derives `cause` from three of them
+and decides act_now / monitor / no_action from all five plus the code checks in
 checks.py. See docs/plan-v3-literal.md's "Cause, derived in code" and "Triage rules
 (step 1)" sections.
 
-`apply_rules` below is the old (v1/v2) three-question rule set (cause/safety_related/
-needs_site_visit); it is kept, unchanged, only because escalate.py's step 2 still
-re-asks Jev with those same three ids (questions/event_with_context.yaml). It is no
-longer used by `triage()` itself. Task 2 removes it once step 2 stops calling Jev.
+`apply_rules` is the old three-question rule set, kept only because escalate.py's step 2
+still uses it (questions/event_with_context.yaml); `triage()` no longer calls it. Task 2
+removes it.
 """
 
 from __future__ import annotations
@@ -84,20 +83,11 @@ class TriageResult:
 
 
 def derive_cause(j: Judgments, status: str) -> str:
-    """Cause, derived in code from three of the five step-1 questions (see
-    docs/plan-v3-literal.md's "Cause, derived in code"): names_routine, then
-    names_outside_condition, then names_turbine_problem, read in that order, stopping
-    at the first that decides.
-
-    A confident yes decides the cause outright. A confident no moves on to the next
-    question. An uncertain read (Judgments already marks the id on j.uncertain as a
-    side effect of the read) stops the derivation immediately: this returns UNCLEAR
-    without reading the remaining question(s) in the chain. If all three come back a
-    confident no, the cause is RUNNING when the event's status is Warning, otherwise
-    UNCLEAR.
-
-    Does not read names_safety_hazard or names_physical_damage; the caller reads those
-    itself."""
+    """The cause, read from names_routine, then names_outside_condition, then
+    names_turbine_problem, stopping at the first confident yes. An uncertain read also
+    stops the chain, returning UNCLEAR without reading the rest. Three confident no's
+    give RUNNING when status is Warning, else UNCLEAR. Does not read
+    names_safety_hazard or names_physical_damage; the caller reads those itself."""
     for qid, cause in ((ROUTINE, PLANNED), (OUTSIDE_CONDITION, EXTERNAL), (TURBINE_PROBLEM, FAULT)):
         if j.yes(qid):
             return cause
@@ -107,16 +97,12 @@ def derive_cause(j: Judgments, status: str) -> str:
 
 
 def apply_step1_rules(j: Judgments, status: str) -> tuple[str, list[str], str]:
-    """Triage rules 2-7 for a non-informational event (see docs/plan-v3-literal.md's
-    "Triage rules (step 1)"; rule 1, informational, is handled in triage() itself,
-    which never asks Jev about those events at all). Returns (triage, reasons, cause).
-
-    names_safety_hazard and names_physical_damage are always read, and the cause chain
-    (derive_cause) is always run, regardless of which rule ends up deciding the triage;
-    evaluate.py scores every non-informational event's cause, not only the ones step 1
-    left uncertain. A confident safety-hazard or physical-damage yes wins even over an
-    uncertain read elsewhere in the cause chain, since both are checked before the
-    uncertainty check."""
+    """Triage rules 2-7 for a non-informational event (rule 1, informational, is
+    handled in triage() itself). Returns (triage, reasons, cause). Always reads
+    names_safety_hazard, names_physical_damage and the cause chain, regardless of which
+    rule decides, since evaluate.py scores every event's cause. A confident safety or
+    damage yes wins even over an uncertain read elsewhere, since both are checked
+    before the uncertainty check."""
     safety = j.yes(SAFETY_HAZARD)
     damage = j.yes(PHYSICAL_DAMAGE)
     cause = derive_cause(j, status)

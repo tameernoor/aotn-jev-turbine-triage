@@ -34,7 +34,7 @@ names_outside_condition:
 
 names_turbine_problem:
   type: noul
-  instructions: Does `message` name an error, fault, failure, defect, timeout, overload or trip in a part or system of the turbine itself?
+  instructions: Does `message` name an error, fault, failure, defect, timeout, overload or trip, or a reading that is too high, too low, at its limit, deviating or implausible, in a part or system of the turbine itself?
   criteria:
-    "true": The message names a problem with something inside the turbine, such as the converter, brake, gearbox, generator, pitch, yaw, hydraulics, a sensor or the controller.
+    "true": The message names a problem or an abnormal reading in something inside the turbine, such as the converter, brake, gearbox, generator, pitch, yaw, hydraulics, a bearing temperature, a sensor or the controller.
     "false": The message only reports a status, a stage or a procedure, or names the grid or wind.
