@@ -1,0 +1,53 @@
+{
+  "counts": {
+    "act_now": 201,
+    "monitor": 955,
+    "no_action": 12863
+  },
+  "top_act_now_messages": [
+    [
+      "Brake accumulator defect",
+      95
+    ],
+    [
+      "Oscillation encoder tower",
+      17
+    ],
+    [
+      "Breakdown obstacle light",
+      16
+    ],
+    [
+      "Safety chain open",
+      14
+    ],
+    [
+      "High rotor speed nacelle",
+      8
+    ]
+  ],
+  "accuracy_by_event": {
+    "correct": 717,
+    "total": 959,
+    "accuracy": 0.7476538060479666
+  },
+  "accuracy_by_message": {
+    "correct": 48,
+    "total": 61,
+    "accuracy": 0.7868852459016393
+  },
+  "jev_calls": 0,
+  "input_tokens": 0,
+  "cost_usd": 0,
+  "wall_seconds": 0.022732208017259836,
+  "model_ids": [],
+  "cache_ignored": false,
+  "step2_jev_calls": 1167,
+  "step2_input_tokens": 866473,
+  "step2_cost_usd": 0.036391866,
+  "step2_wall_seconds": 20.937211082782596,
+  "step2_model_ids": [
+    "jev-1.13.0"
+  ],
+  "step2_cache_ignored": false
+}

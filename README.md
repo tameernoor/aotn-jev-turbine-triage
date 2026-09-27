@@ -126,8 +126,8 @@ uv run --env-file .env python -m jev_turbine run \
   --cache results/judgments-2016.json --no-context
 ```
 
-Once `results/judgments-context-2016.json` also exists (see `## Measured: step 2`),
-this reproduces both steps without calling Jev at all:
+With `results/judgments-context-2016.json` (see `## Measured: step 2`), this
+reproduces both steps without calling Jev at all:
 
 ```
 uv run --env-file .env python -m jev_turbine run \
@@ -344,36 +344,54 @@ honest.
 
 ## Measured: step 2
 
-<TBD by real run: one run against `jev-<version>` over all of 2016 for the six
-turbines, with an empty step-2 cache, chained onto the step-1 run above.
-`questions/event_with_context.yaml` was committed before any step-2 run and not
-changed after it. The answers are in `results/judgments-context-2016.json`, so the
-numbers below can be reproduced without calling Jev; see "How to fetch and run" for
-`--cache` plus `--context-cache` together.>
+One run against `jev-1.13.0` over all of 2016 for the six turbines, with an empty
+step-2 cache, on top of the step-1 answers above (read from
+`results/judgments-2016.json`, so step 1 is exactly the run described in "Measured").
+`questions/event_with_context.yaml` was committed before the run and not changed after
+it. The step-2 answers are in `results/judgments-context-2016.json` and the run's
+summary in `results/summary-context-2016.json`, so the numbers below reproduce without
+calling Jev.
 
 ### Speed and cost
 
-- <TBD by real run: how many events step 1 left uncertain, and how many distinct
-  status/message/context states that came out to after the dedupe described in "Step
-  2: context".>
-- <TBD by real run: wall time, input tokens and cost for step 2 alone, kept separate
-  from step 1's own numbers above.>
+- Step 1 left 1,200 events uncertain. Their status, message and context came to 1,167
+  distinct states, so step 2 made 1,167 Jev requests, one per state, 20 at a time.
+- Step 2 took 21 seconds, 866,473 input tokens and $0.036. That is about 740 tokens per
+  request, against about 590 for a step-1 request: the context adds only a few lines.
 
 ### Cause, with context, against the operator's own category
 
-- <TBD by real run: `accuracy_by_event` versus `accuracy_by_event_with_context`, both
-  against the same 959-event answer key.>
-- <TBD by real run: among escalated events that carry an IEC category,
-  `escalated_with_iec_category`'s `cause_changed`, `wrong_to_right`, `right_to_wrong`
-  and `still_uncertain` counts, with a couple of named examples of which direction
-  the second question moved things.>
+- Over the same 959 events with an IEC category, `cause` agreed with the operator for
+  717 (75 %) with step 1 alone and 808 (84 %) with step 2 added.
+- 703 of the escalated events carry an IEC category. Step 2 changed the cause for 148
+  of them: 118 from wrong to right, 27 from right to wrong, 3 from one wrong cause to
+  another. 449 of the 703 were still uncertain after step 2.
+- The gain is narrow. 117 of the 118 corrections are the three "Overload generator fan"
+  warnings, which step 1 called `running` and the operator files as forced outages;
+  with the context in front of it Jev called them `fault`.
+- The biggest loss is "Cable autounwind" (18 events). Step 1 called it `planned`, which
+  matches the operator; with the context, which shows the turbine stopped and produced
+  nothing for a while, Jev called it `fault`.
+- Some disagreements do not move at all. "Comm. failure FPM" (65 events) is `fault`
+  both times, while the operator files it as full performance: the turbine kept
+  producing, and a lost communication link is not something a power curve shows.
 
 ### Triage, before and after step 2
 
-- <TBD by real run: `triage_counts_before_context` versus `triage_counts_after_context`,
-  and how much of the step-1 monitor pile step 2 actually resolved to act_now or
-  no_action versus how much stayed monitor on its own uncertain reason.>
+- act_now went from 69 to 201, monitor from 1,341 to 955, no action from 12,609 to
+  12,863.
+- Of the 1,200 escalated events, 254 went to no action, 132 to act_now and 814 stayed
+  in monitor.
+- The 132 new act_now events are all "fault needing a site visit": "Brake accumulator
+  defect" (95), "Breakdown obstacle light" (16), "Brake pads worn" (7) and a handful of
+  others. 119 of the 132 have no IEC category in the operator's log, so this data
+  cannot say whether they deserved it. "Brake pads worn" plausibly does; 95 brake
+  accumulator warnings is a lot of site visits.
 
-<TBD by real run: what this shows, in the same plain, unhyped register as "What this
-shows" above, including whether the extra context earned its cost or mostly confirmed
-step 1.>
+What this shows: a second, narrower look with a few computed numbers is cheap (a few
+cents for a year of a wind farm) and it does change answers, mostly in the right
+direction on the events the operator labelled. It does not settle what the text and
+a power curve cannot show, and two thirds of the escalated events stayed uncertain.
+Those are the ones where a person, or a third step with other data such as the
+turbine's own fault codes or maintenance log, would have to decide. As with step 1,
+the question wording was not tuned against these results.
