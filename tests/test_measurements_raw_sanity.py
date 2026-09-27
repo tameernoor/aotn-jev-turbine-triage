@@ -2,8 +2,8 @@
 hold them (as data/raw/kelmarsh.duckdb, built by fetch.fetch_kelmarsh, or as loose
 CSVs this builds a fresh in-memory database from). data/raw/ is git-ignored and not
 part of a fresh checkout, so this whole file skips when neither is present. When
-present, it checks the loader's totals against the real 2016 data and the coverage
-facts in docs/plan-v2-context.md's "Data" section.
+present, it checks the loader's totals against the real 2016 data and the known
+2016 coverage for Kelmarsh 1.
 """
 
 from datetime import datetime, timezone
@@ -40,7 +40,7 @@ def test_full_2016_kelmarsh_1_has_one_row_per_ten_minutes(con):
     assert count == 52416
 
 
-def test_full_2016_kelmarsh_1_column_coverage_matches_the_plan(con):
+def test_full_2016_kelmarsh_1_column_coverage_matches_2016(con):
     [row] = con.execute(
         """
         SELECT

@@ -195,6 +195,7 @@ def test_summary_json_holds_the_printed_fields_plus_the_model_ids_seen(tmp_path)
         "top_act_now_messages",
         "accuracy_by_event",
         "accuracy_by_message",
+        "accuracy_by_event_with_context",
         "jev_calls",
         "input_tokens",
         "cost_usd",

@@ -21,7 +21,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_full_2016_event_and_status_counts_match_the_plan():
+def test_full_2016_event_and_status_counts_match_2016():
     events = load_events(RAW_DIR)
     statuses = Counter(e.status for e in events)
 

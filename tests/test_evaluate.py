@@ -69,7 +69,7 @@ def cache_with(*pairs):
 # --- the mapping itself ---
 
 
-def test_iec_to_cause_matches_the_plan():
+def test_iec_to_cause_mapping():
     assert IEC_TO_CAUSE == {
         "Forced outage": "fault",
         "Scheduled Maintenance": "planned",

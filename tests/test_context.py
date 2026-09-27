@@ -433,7 +433,7 @@ def test_farm_wide_stop_says_no_when_none_found():
     assert "Other turbines stopped in the same 10 minutes: no." in lines
 
 
-# --- full render, shaped like the plan's worked example -------------------------------
+# --- full render, shaped like the README's example -------------------------------
 
 
 def test_full_render_matches_the_documented_example_shape():

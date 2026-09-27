@@ -175,6 +175,7 @@ def _summarise(
         "top_act_now_messages": act_now_messages.most_common(TOP_ACT_NOW_MESSAGES),
         "accuracy_by_event": evaluation["accuracy_by_event"],
         "accuracy_by_message": evaluation["accuracy_by_message"],
+        "accuracy_by_event_with_context": evaluation.get("accuracy_by_event_with_context"),
         "jev_calls": len(usage_calls),
         "input_tokens": sum(c["input_tokens"] for c in usage_calls),
         "cost_usd": sum(c["cost_usd"] for c in usage_calls),
@@ -225,6 +226,11 @@ def _format_summary(summary: dict) -> str:
         f"{_fmt_accuracy(summary['accuracy_by_event'])} by event, "
         f"{_fmt_accuracy(summary['accuracy_by_message'])} by distinct message"
     )
+    if summary.get("accuracy_by_event_with_context"):
+        lines.append(
+            "Evaluation accuracy with step 2: "
+            f"{_fmt_accuracy(summary['accuracy_by_event_with_context'])} by event"
+        )
     lines.append(
         f"Jev calls: {summary['jev_calls']}, input tokens: {summary['input_tokens']}, "
         f"cost: ${summary['cost_usd']:.6f}, wall time: {summary['wall_seconds']:.2f}s"

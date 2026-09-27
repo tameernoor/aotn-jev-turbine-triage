@@ -38,8 +38,7 @@ Window rules:
   the end of the last known reading before the gap. Missing data is said, not
   guessed.
 
-Rotor speed has no rounding rule in the plan; rounds to the nearest whole RPM,
-matching the plan's own "0 RPM" example.
+Rotor speed rounds to the nearest whole RPM.
 
 "Other turbines stopped" always renders (yes/no+count); "event just before" only
 renders when one exists; the whole measurement block collapses to one "No data"
@@ -94,8 +93,8 @@ class MeasurementStats:
 
 def measurement_stats(con: duckdb.DuckDBPyConnection, events: Sequence[Event]) -> list[MeasurementStats]:
     """Run sql/context.sql once for every event in `events`, returned in the same
-    order. This is the batch entry point Task 2's escalation step should call
-    with the whole set of events to escalate in one go; `build_context` below is
+    order. Call it once with the whole set of events to
+    escalate; `build_context` below is
     a single-event convenience wrapper over the same batch machinery."""
     if not events:
         return []

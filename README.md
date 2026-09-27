@@ -104,7 +104,8 @@ where output is written (default `out/`). Each run writes:
 - `out/evaluation.json`: the accuracy report described below, now also comparing step
   1 alone against step 1 plus step 2.
 - `out/summary.json`: the same summary printed at the end, as JSON: triage counts,
-  the top act_now messages, evaluation accuracy, and how many Jev calls step 1 made,
+  the top act_now messages, evaluation accuracy (step 1 alone, and with step 2 when it
+  ran), and how many Jev calls step 1 made,
   at what token count, cost and wall time, plus the model ids seen, and the same five
   numbers again for step 2, kept separate.
 
@@ -122,7 +123,7 @@ against Jev, paying for every escalated call.
 To reproduce `## Measured` (step 1 only) without calling Jev:
 
 ```
-uv run --env-file .env python -m jev_turbine run \
+uv run python -m jev_turbine run \
   --cache results/judgments-2016.json --no-context
 ```
 
@@ -130,7 +131,7 @@ With `results/judgments-context-2016.json` (see `## Measured: step 2`), this
 reproduces both steps without calling Jev at all:
 
 ```
-uv run --env-file .env python -m jev_turbine run \
+uv run python -m jev_turbine run \
   --cache results/judgments-2016.json \
   --context-cache results/judgments-context-2016.json
 ```
@@ -183,7 +184,8 @@ event history, rather than left for Jev to guess at from three or four words of 
 text.
 
 The measurement numbers in that paragraph, mean power and wind before the event, mean
-power and rotor speed after it, how long power stayed below 50 kW, and grid frequency
+power and rotor speed after it (rotor speed only where the data has it, about half
+the escalated events), how long power stayed below 50 kW, and grid frequency
 and voltage around the event, come from one SQL query, `src/jev_turbine/sql/context.sql`,
 run once over the whole batch of events being escalated rather than once per event. A
 reader can check the arithmetic directly there instead of trusting a description of
@@ -369,7 +371,7 @@ calling Jev.
 - The gain is narrow. 117 of the 118 corrections are the three "Overload generator fan"
   warnings, which step 1 called `running` and the operator files as forced outages;
   with the context in front of it Jev called them `fault`.
-- The biggest loss is "Cable autounwind" (18 events). Step 1 called it `planned`, which
+- The biggest loss is "Cable autounwind", 18 of its 68 events. Step 1 called it `planned`, which
   matches the operator; with the context, which shows the turbine stopped and produced
   nothing for a while, Jev called it `fault`.
 - Some disagreements do not move at all. "Comm. failure FPM" (65 events) is `fault`

@@ -113,7 +113,7 @@ async def escalate(
     sent to Jev (see EscalationCache), so a later call does not ask Jev again
     for the same status/message/context. Two escalated events that render the
     same state within a single call are also only asked once each, not once
-    per event (see the dedupe below `contexts` above). `limit` bounds how many
+    per event (the dedupe by cache key below). `limit` bounds how many
     Jev requests are in flight at once. If one ask raises, every other ask this
     call started is still awaited to completion first, so `cache` holds every
     answer that was ever going to arrive before the exception is re-raised.
@@ -177,7 +177,7 @@ async def escalate(
 
 
 # --- cache persistence -------------------------------------------------------------
-# Task 3's CLI calls these to seed and save out/judgments-context.json, the same way
+# The CLI calls these to seed and save out/judgments-context.json, the same way
 # __main__._load_cache/_save_cache handle out/judgments.json for step 1.
 
 
