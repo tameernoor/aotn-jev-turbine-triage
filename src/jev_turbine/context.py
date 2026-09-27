@@ -1,65 +1,56 @@
 """Builds plain-text context for one or more events, from their own turbines'
-10-minute measurements (queried from DuckDB, see measurements.py and
-sql/context.sql) and the full event list (loader.py). A later step sends the
-rendered text to Jev alongside `status` and `message` when step 1 is uncertain
-about an event.
+10-minute measurements (measurements.py, sql/context.sql) and the full event list
+(loader.py). A later step sends the rendered text to Jev alongside `status` and
+`message` when step 1 is uncertain about an event.
 
-The measurement numbers (before/after means, the below-50kW duration, rotor,
-grid min/max) come from ONE SQL query over every event passed in at once
-(`measurement_stats`), not one query per event: pass the whole batch of events to
-escalate to `measurement_stats`/`build_contexts` in a single call. Everything else
-here (rendering, and the three history lines) is plain Python over the in-memory
-event list, no SQL involved.
+The measurement numbers (before/after means, the below-50kW duration, rotor, grid
+min/max) come from ONE SQL query over every event passed in at once
+(`measurement_stats`): pass the whole batch of events to escalate to
+`measurement_stats`/`build_contexts` in a single call, not one call per event.
+Everything else here (rendering, and the three history lines) is plain Python over
+the in-memory event list.
 
-Window definitions. The plan gives the rules but not the exact boundaries, so they
-are pinned down here (and in sql/context.sql, which does the actual filtering):
+Window rules:
 
 - 10-minute rows mark the START of their period: a row stamped ts covers
-  [ts, ts+10min). "Before" = rows whose whole period ends at or before the event
-  start; "after" = rows whose whole period starts at or after the event start. A
-  row whose period straddles the start (starts before it, ends after it) counts
-  toward neither the before nor the after mean, since it blends pre- and
-  post-event readings and would otherwise quietly drag one side's average toward
-  the other.
-- "Before": the 60 minutes fully before the start. "After": the 60 minutes fully
-  after the start.
-- "Around" (grid frequency/voltage): the one hour fully within +/-30 minutes of
-  the start, i.e. "the hour around the event" in the rendered example is 60
-  minutes total, not 120.
-- "Farm-wide stop": another turbine logged a Stop whose own start falls within 10
-  minutes either side of this event's start (|other.start - event.start| <=
-  10min), reading "the same 10 minutes" generously in both directions, as the
-  plan allows.
-- "Power stayed below 50 kW": measured from the event start, over rows with a
-  known (non-None) power reading, ignoring gaps, looking arbitrarily far ahead
-  (not just the 60-minute after-window) to find a recovery. If the first known
-  reading after the start is already at or above 50 kW, power did not drop and
-  the duration is zero. Otherwise the duration runs until the first known reading
-  at or above 50 kW within 24 hours of the start; if none is found in that window
-  (no recovery seen, or the data does not reach that far), the duration is
-  reported as the 24-hour cap itself.
+  [ts, ts+10min). The row whose period contains the event start straddles it and
+  is excluded from both the before and after mean. Before is the 6 rows (a full
+  60 minutes) ending at that row's start; after is the 6 rows starting at that
+  row's end. If the event start falls exactly on the 10-minute grid there is no
+  straddling row: before is the 6 rows ending at the start, after is the 6 rows
+  starting at it. See `_grid_boundaries`.
+- "Around" (grid frequency/voltage): the straddling row (or the row at the start,
+  on the grid) plus 3 rows before and 3 after, 7 rows in total. Still rendered as
+  "the hour around the event".
+- "Farm-wide stop": counts distinct OTHER turbines with a Stop starting within 10
+  minutes either side of this event's start. This is a choice, not a rule from
+  the source data: "the same 10 minutes" is read generously, both directions.
+- "Power stayed below 50 kW": walks forward from the event start over known
+  (non-NULL) power readings. If the first known reading is already at or above
+  50 kW, it did not drop (0). Otherwise: recovers within 24h -> exact seconds to
+  the first reading at or above 50 kW; readings stay known and low all the way to
+  24h -> "at least 24 h"; the data stops (a gap of more than 30 minutes between
+  known readings) before either -> "at least <X>, then no power data", X to the
+  end of the last known reading. Missing data is said, not guessed.
 
-Rotor speed has no rounding rule in the plan (only power, wind, frequency, voltage
-and durations are given one); the plan's own worked example renders "0 RPM" with
-no decimal, so this rounds rotor speed to the nearest whole RPM.
+Rotor speed has no rounding rule in the plan; rounds to the nearest whole RPM,
+matching the plan's own "0 RPM" example.
 
-The "Other turbines stopped in the same 10 minutes" line always renders, as
-yes/no(+count), since it is always answerable. "Event just before" only renders
-when one exists, and the whole measurement block collapses to the one "No data"
-line only when both before and after power are missing, per the plan.
+"Other turbines stopped" always renders (yes/no+count); "event just before" only
+renders when one exists; the whole measurement block collapses to one "No data"
+line only when both before and after power are missing.
 
-DuckDB's Python client in this environment cannot fetch a raw TIMESTAMPTZ value
-back into a Python object (it needs `pytz`, not a project dependency). Nothing
-here ever does that: event start times are only ever bound INTO DuckDB as query
-parameters, never read back out; sql/context.sql returns plain numbers, matched
-back to events by a positional index, not by timestamp.
+DuckDB's Python client here cannot fetch a raw TIMESTAMPTZ value back into Python.
+Event start times are only ever bound INTO DuckDB as query parameters; results
+crossing back to Python are plain numbers, matched to events by a positional
+index, never by timestamp.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import duckdb
@@ -72,9 +63,9 @@ _CONTEXT_SQL = _SQL_PATH.read_text(encoding="utf-8")
 HISTORY_WINDOW = timedelta(days=7)
 JUST_BEFORE_WINDOW = timedelta(minutes=30)
 FARM_WIDE_WINDOW = timedelta(minutes=10)
+GRID_STEP = timedelta(minutes=10)
 
 LOW_POWER_THRESHOLD_KW = 50.0
-LOW_POWER_CAP = timedelta(hours=24)
 
 NO_DATA_LINE = "No 10-minute data around this event."
 
@@ -92,7 +83,8 @@ class MeasurementStats:
     freq_max: float | None
     volt_min: float | None
     volt_max: float | None
-    low_power_seconds: float | None
+    low_power_recovered_seconds: float | None
+    low_power_gap_seconds: float | None
 
 
 def measurement_stats(con: duckdb.DuckDBPyConnection, events: Sequence[Event]) -> list[MeasurementStats]:
@@ -102,13 +94,17 @@ def measurement_stats(con: duckdb.DuckDBPyConnection, events: Sequence[Event]) -
     a single-event convenience wrapper over the same batch machinery."""
     if not events:
         return []
-    con.execute("CREATE OR REPLACE TEMP TABLE _context_events (idx INTEGER, turbine INTEGER, start TIMESTAMPTZ)")
-    con.executemany(
-        "INSERT INTO _context_events VALUES (?, ?, ?)",
-        [(i, _turbine_number(event.turbine), event.start) for i, event in enumerate(events)],
+    con.execute(
+        "CREATE OR REPLACE TEMP TABLE _context_events "
+        "(idx INTEGER, turbine INTEGER, start TIMESTAMPTZ, before_end TIMESTAMPTZ, after_start TIMESTAMPTZ)"
     )
-    rows = con.execute(_CONTEXT_SQL).fetchall()
-    by_idx = {row[0]: row[1:] for row in rows}
+    rows = []
+    for i, event in enumerate(events):
+        before_end, after_start = _grid_boundaries(event.start)
+        rows.append((i, _turbine_number(event.turbine), event.start, before_end, after_start))
+    con.executemany("INSERT INTO _context_events VALUES (?, ?, ?, ?, ?)", rows)
+    result_rows = con.execute(_CONTEXT_SQL).fetchall()
+    by_idx = {row[0]: row[1:] for row in result_rows}
     return [MeasurementStats(*by_idx[i]) for i in range(len(events))]
 
 
@@ -138,6 +134,18 @@ def _turbine_number(turbine_name: str) -> int:
     return int(digits)
 
 
+def _grid_boundaries(start: datetime) -> tuple[datetime, datetime]:
+    """(before_end, after_start): before is the 6 rows ending at before_end;
+    after is the 6 rows starting at after_start. If `start` is exactly on the
+    10-minute grid, both equal `start`. Otherwise the row covering `start`
+    straddles it (excluded from both): before_end is that row's own start,
+    after_start is ten minutes later, its end."""
+    floor = start.replace(minute=(start.minute // 10) * 10, second=0, microsecond=0)
+    if floor == start:
+        return start, start
+    return floor, floor + GRID_STEP
+
+
 # --- measurements ---------------------------------------------------------------
 
 
@@ -156,10 +164,9 @@ def _measurement_lines(stats: MeasurementStats) -> list[str]:
         lines.append(f"Before the event: {', '.join(before_parts)} (60-minute averages).")
 
     if stats.after_power is not None:
-        duration = timedelta(seconds=stats.low_power_seconds)
         lines.append(
             f"After the event: power {_fmt_power(stats.after_power)}; "
-            f"power stayed below {int(LOW_POWER_THRESHOLD_KW)} kW for {_fmt_duration(duration)}."
+            f"power stayed below {int(LOW_POWER_THRESHOLD_KW)} kW for {_fmt_low_power_duration(stats)}."
         )
 
     if stats.rotor_after is not None:
@@ -174,6 +181,15 @@ def _measurement_lines(stats: MeasurementStats) -> list[str]:
         lines.append(f"Grid in the hour around the event: {', '.join(grid_parts)}.")
 
     return lines
+
+
+def _fmt_low_power_duration(stats: MeasurementStats) -> str:
+    if stats.low_power_recovered_seconds is not None:
+        return _fmt_duration(timedelta(seconds=stats.low_power_recovered_seconds))
+    if stats.low_power_gap_seconds is not None:
+        duration = _fmt_duration(timedelta(seconds=stats.low_power_gap_seconds))
+        return f"at least {duration}, then no power data"
+    return "at least 24 h"
 
 
 # --- history ---------------------------------------------------------------------
@@ -225,13 +241,17 @@ def _event_just_before(event: Event, events: Sequence[Event]) -> str | None:
 
 
 def _farm_wide_stop_count(event: Event, events: Sequence[Event]) -> int:
+    """Distinct other turbines with a Stop starting within 10 minutes either side
+    of this event's start (not a count of Stop events: one turbine chattering
+    through several Stops in the window still counts once)."""
     window_start = event.start - FARM_WIDE_WINDOW
     window_end = event.start + FARM_WIDE_WINDOW
-    return sum(
-        1
+    turbines = {
+        e.turbine
         for e in events
         if e.turbine != event.turbine and e.status == "Stop" and window_start <= e.start <= window_end
-    )
+    }
+    return len(turbines)
 
 
 # --- rendering ---------------------------------------------------------------------

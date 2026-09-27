@@ -39,9 +39,16 @@ def _make_source_turbine_data_csvs(dir_path: Path) -> None:
         (dir_path / name).write_text(_turbine_data_csv_text(n), encoding="utf-8")
 
 
+def _make_complete_source(dir_path: Path) -> None:
+    """A source with both Status and Turbine_Data CSVs: a real fetch needs both,
+    so this is the fixture for tests that expect fetch_kelmarsh to succeed."""
+    _make_source_csvs(dir_path)
+    _make_source_turbine_data_csvs(dir_path)
+
+
 def test_copies_from_local_directory_when_csvs_are_present(tmp_path):
     source = tmp_path / "source"
-    _make_source_csvs(source)
+    _make_complete_source(source)
     raw = tmp_path / "raw"
 
     result = fetch_kelmarsh(raw, local_dirs=[source])
@@ -54,7 +61,7 @@ def test_copies_from_local_directory_when_csvs_are_present(tmp_path):
 
 def test_is_a_noop_and_never_touches_the_network_when_raw_dir_is_already_populated(tmp_path, monkeypatch):
     raw = tmp_path / "raw"
-    _make_source_csvs(raw)
+    _make_complete_source(raw)
 
     def boom(*args, **kwargs):
         raise AssertionError("should not touch the network when raw_dir is already populated")
@@ -73,6 +80,8 @@ def test_extracts_only_status_csvs_from_a_local_zip(tmp_path):
     with zipfile.ZipFile(zip_path, "w") as zf:
         for name in STATUS_NAMES:
             zf.writestr(name, f"# Turbine: {name}\ndata\n")
+        for n, name in zip(range(1, 7), TURBINE_DATA_NAMES):
+            zf.writestr(name, _turbine_data_csv_text(n))
         zf.writestr("Turbine_Kelmarsh_1_2016.csv", "not a status file\n")
         zf.writestr("Metmast_Kelmarsh_2016.csv", "not a status file either\n")
 
@@ -88,7 +97,7 @@ def test_falls_through_local_dirs_in_order(tmp_path):
     empty = tmp_path / "empty"
     empty.mkdir()
     source = tmp_path / "source"
-    _make_source_csvs(source)
+    _make_complete_source(source)
     raw = tmp_path / "raw"
 
     result = fetch_kelmarsh(raw, local_dirs=[empty, source])
@@ -148,7 +157,7 @@ def test_fetch_reaches_the_download_path_without_a_local_source_but_does_not_dow
 
 def test_uses_kelmarsh_local_dir_env_var_when_local_dirs_is_not_given(tmp_path, monkeypatch):
     source = tmp_path / "source"
-    _make_source_csvs(source)
+    _make_complete_source(source)
     monkeypatch.setenv(fetch_module.LOCAL_DIR_ENV_VAR, str(source))
 
     result = fetch_kelmarsh(tmp_path / "raw")
@@ -178,13 +187,12 @@ def test_incomplete_local_mirror_raises_a_clear_error(tmp_path):
         fetch_kelmarsh(tmp_path / "raw", local_dirs=[source])
 
 
-# --- Turbine_Data (10-minute measurements) -----------------------------------------
+# --- Turbine_Data (10-minute measurements): mandatory, like Status ------------------
 
 
 def test_turbine_data_csvs_are_copied_from_a_local_directory_alongside_status(tmp_path):
     source = tmp_path / "source"
-    _make_source_csvs(source)
-    _make_source_turbine_data_csvs(source)
+    _make_complete_source(source)
     raw = tmp_path / "raw"
 
     fetch_kelmarsh(raw, local_dirs=[source])
@@ -194,28 +202,32 @@ def test_turbine_data_csvs_are_copied_from_a_local_directory_alongside_status(tm
         assert (raw / name).read_text(encoding="utf-8") == (source / name).read_text(encoding="utf-8")
 
 
-def test_turbine_data_is_left_alone_when_the_source_only_has_status_csvs(tmp_path):
+def test_turbine_data_reaches_the_download_path_when_the_source_only_has_status_csvs(tmp_path, monkeypatch):
+    """With nothing local for Turbine_Data (no CSVs, no zip), this falls through
+    to a download attempt, the same as Status does when nothing local exists: it
+    never just quietly moves on with no Turbine_Data at all."""
     source = tmp_path / "source"
     _make_source_csvs(source)
     raw = tmp_path / "raw"
 
-    fetch_kelmarsh(raw, local_dirs=[source])
+    def no_network(*args, **kwargs):
+        raise OSError("tests must not perform a real download")
 
-    assert list(raw.glob("Turbine_Data_Kelmarsh_*.csv")) == []
+    monkeypatch.setattr(fetch_module.urllib.request, "urlopen", no_network)
+
+    with pytest.raises(OSError):
+        fetch_kelmarsh(raw, local_dirs=[source])
 
 
-def test_incomplete_turbine_data_in_a_local_directory_is_not_copied(tmp_path):
+def test_incomplete_turbine_data_in_a_local_directory_raises_a_clear_error(tmp_path):
     source = tmp_path / "source"
     _make_source_csvs(source)
-    source.mkdir(exist_ok=True)
     for name in TURBINE_DATA_NAMES[:2]:
         (source / name).write_text("data\n", encoding="utf-8")
     raw = tmp_path / "raw"
 
-    fetch_kelmarsh(raw, local_dirs=[source])
-
-    # Falls through rather than copying a partial set (no zip to complete it from).
-    assert list(raw.glob("Turbine_Data_Kelmarsh_*.csv")) == []
+    with pytest.raises(fetch_module.FetchError, match="2 Turbine_Data CSV"):
+        fetch_kelmarsh(raw, local_dirs=[source])
 
 
 def test_turbine_data_csvs_are_extracted_from_a_local_zip_alongside_status(tmp_path):
@@ -235,6 +247,20 @@ def test_turbine_data_csvs_are_extracted_from_a_local_zip_alongside_status(tmp_p
     for n, name in zip(range(1, 7), TURBINE_DATA_NAMES):
         assert (raw / name).read_text(encoding="utf-8") == _turbine_data_csv_text(n)
     assert not (raw / "Metmast_Kelmarsh_2016.csv").exists()
+
+
+def test_turbine_data_raises_when_a_local_zip_has_an_incomplete_set(tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+    zip_path = source / fetch_module.ZENODO_FILENAME
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        for name in STATUS_NAMES:
+            zf.writestr(name, f"# Turbine: {name}\ndata\n")
+        for n, name in zip(range(1, 4), TURBINE_DATA_NAMES[:3]):
+            zf.writestr(name, _turbine_data_csv_text(n))
+
+    with pytest.raises(fetch_module.FetchError, match="3 Turbine_Data_Kelmarsh_"):
+        fetch_kelmarsh(tmp_path / "raw", local_dirs=[source])
 
 
 def test_turbine_data_is_extracted_from_the_zip_already_downloaded_for_status(tmp_path, monkeypatch):
@@ -264,8 +290,7 @@ def test_turbine_data_is_extracted_from_the_zip_already_downloaded_for_status(tm
 
 def test_turbine_data_fetch_is_a_noop_when_raw_dir_already_has_all_six(tmp_path, monkeypatch):
     raw = tmp_path / "raw"
-    _make_source_csvs(raw)
-    _make_source_turbine_data_csvs(raw)
+    _make_complete_source(raw)
 
     def boom(*args, **kwargs):
         raise AssertionError("should not touch the network when raw_dir is already populated")
@@ -282,8 +307,7 @@ def test_turbine_data_fetch_is_a_noop_when_raw_dir_already_has_all_six(tmp_path,
 
 def test_fetch_builds_the_duckdb_database_from_the_turbine_data_csvs(tmp_path):
     source = tmp_path / "source"
-    _make_source_csvs(source)
-    _make_source_turbine_data_csvs(source)
+    _make_complete_source(source)
     raw = tmp_path / "raw"
 
     fetch_kelmarsh(raw, local_dirs=[source])
@@ -301,8 +325,7 @@ def test_fetch_builds_the_duckdb_database_from_the_turbine_data_csvs(tmp_path):
 
 def test_fetch_skips_rebuilding_the_duckdb_database_when_already_populated(tmp_path):
     source = tmp_path / "source"
-    _make_source_csvs(source)
-    _make_source_turbine_data_csvs(source)
+    _make_complete_source(source)
     raw = tmp_path / "raw"
     fetch_kelmarsh(raw, local_dirs=[source])
 
@@ -324,11 +347,17 @@ def test_fetch_skips_rebuilding_the_duckdb_database_when_already_populated(tmp_p
         con.close()
 
 
-def test_fetch_does_not_build_a_database_when_no_turbine_data_is_available(tmp_path):
+def test_fetch_never_builds_a_database_from_an_incomplete_turbine_data_set(tmp_path):
+    """A run must never silently use an empty (or partial) measurements table:
+    an incomplete local Turbine_Data set raises before the DuckDB build step is
+    ever reached, so no database is created at all."""
     source = tmp_path / "source"
     _make_source_csvs(source)
+    for name in TURBINE_DATA_NAMES[:2]:
+        (source / name).write_text("data\n", encoding="utf-8")
     raw = tmp_path / "raw"
 
-    fetch_kelmarsh(raw, local_dirs=[source])
+    with pytest.raises(fetch_module.FetchError):
+        fetch_kelmarsh(raw, local_dirs=[source])
 
     assert not (raw / measurements.DB_FILENAME).exists()

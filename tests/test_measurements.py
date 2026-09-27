@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from pathlib import Path
 
+import duckdb
 import pytest
 
 from jev_turbine.measurements import (
@@ -9,6 +10,8 @@ from jev_turbine.measurements import (
     LoadError,
     build_database,
     build_database_from_dir,
+    connect,
+    connect_for_read,
     connect_in_memory,
     is_populated,
 )
@@ -220,6 +223,53 @@ def test_is_populated_counts_distinct_turbines(tmp_path):
 
     assert is_populated(con) is False  # only one of six turbines
     assert is_populated(con, expected_turbines=1) is True
+
+
+def test_connect_for_read_raises_when_the_file_does_not_exist(tmp_path):
+    with pytest.raises(LoadError):
+        connect_for_read(tmp_path / "does-not-exist.duckdb")
+
+
+def test_connect_for_read_raises_when_the_table_is_missing(tmp_path):
+    db_path = tmp_path / "empty.duckdb"
+    # A DuckDB file that exists but was never prepared by this module (no
+    # `measurements` table at all).
+    con = duckdb.connect(str(db_path))
+    con.execute("CREATE TABLE placeholder (x INTEGER)")
+    con.close()
+
+    with pytest.raises(LoadError):
+        connect_for_read(db_path)
+
+
+def test_connect_for_read_raises_when_the_table_is_incomplete(tmp_path):
+    db_path = tmp_path / "partial.duckdb"
+    path = tmp_path / "Turbine_Data_Kelmarsh_1_2016.csv"
+    _write(path, "Kelmarsh 1", [_row({"Date and time": "2016-01-03 00:00:00", "Power (kW)": "1"})])
+    con = connect(db_path)
+    build_database(con, [path])  # only one of six turbines
+    con.close()
+
+    with pytest.raises(LoadError):
+        connect_for_read(db_path)
+
+
+def test_connect_for_read_succeeds_when_all_six_turbines_are_present(tmp_path):
+    db_path = tmp_path / "complete.duckdb"
+    paths = []
+    for n in range(1, 7):
+        path = tmp_path / f"Turbine_Data_Kelmarsh_{n}_2016.csv"
+        _write(path, f"Kelmarsh {n}", [_row({"Date and time": "2016-01-03 00:00:00", "Power (kW)": "1"})])
+        paths.append(path)
+    con = connect(db_path)
+    build_database(con, paths)
+    con.close()
+
+    con = connect_for_read(db_path)
+    try:
+        assert is_populated(con)
+    finally:
+        con.close()
 
 
 def test_missing_header_line_raises_load_error(tmp_path):

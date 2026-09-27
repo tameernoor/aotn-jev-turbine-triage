@@ -2,30 +2,24 @@
 (one row per turbine per 10-minute period, allowed columns only) and opens that
 table for querying by context.py.
 
-Each file starts with `#` comment lines (including `# Turbine: <name>` and `# Time
-zone: UTC`), then the column header line itself starts with `# Date and time,...`.
-Column names contain commas (for example `"Wind speed, Standard deviation (m/s)"`),
-so the header line is parsed with the `csv` module, never by splitting on commas by
-hand; the header is only scanned from the first `_MAX_HEADER_SCAN_LINES` lines of
-each file, not the whole ~90 MB CSV. Turbine_Data files carry several hundred
+Each file starts with `#` comment lines, then a header line starting `# Date and
+time,...`; column names contain commas, so the header is parsed with the `csv`
+module rather than split by hand, scanning only the first `_MAX_HEADER_SCAN_LINES`
+lines rather than the whole ~90 MB file. Turbine_Data files carry several hundred
 columns (Lost Production, Availability, IEC, Contractual, Curtailment, Energy
 Budget, Potential power, Capacity, Data Availability and more); the `measurements`
-table has room only for the five allowed columns plus the turbine and timestamp, so
-none of those can ever reach a Jev prompt through this loader, structurally, not
-just by convention. The bulk load itself is DuckDB's own `read_csv`, run directly
-against the source file (fast, and does the real RFC4180 quoting/escaping that a
-hand-rolled parser would have to reimplement); "NaN" becomes NULL.
+table has room only for the five allowed columns plus turbine and timestamp, so no
+other column can reach a Jev prompt through this loader, structurally. The bulk
+load is DuckDB's own `read_csv` against the source file directly; "NaN" becomes
+NULL.
 
 Timestamps mark the START of each 10-minute period, UTC (a row stamped ts covers
-[ts, ts+10min)); the source timestamps are naive but the header states UTC, so this
-sets the session time zone to UTC before casting, the same effect as loader.py's
-`.replace(tzinfo=timezone.utc)` for the Status CSVs.
+[ts, ts+10min)); the session time zone is set to UTC before casting, since the
+source timestamps are naive but known to be UTC.
 
-DuckDB's Python client cannot fetch a raw TIMESTAMPTZ value back into a Python
-object in this environment (it needs `pytz`, which is not a project dependency and
-was not asked for); every function here and in context.py is written to never do
-that. Timestamps only ever appear inside DuckDB SQL (comparisons, arithmetic), and
-results that leave DuckDB for Python are plain numbers.
+DuckDB's Python client here cannot fetch a raw TIMESTAMPTZ value back into Python.
+Timestamps only ever appear inside DuckDB SQL; results that leave DuckDB for
+Python are plain numbers.
 """
 
 from __future__ import annotations
@@ -98,6 +92,31 @@ def connect_in_memory() -> duckdb.DuckDBPyConnection:
     return con
 
 
+def connect_for_read(db_path: Path) -> duckdb.DuckDBPyConnection:
+    """Open the persisted database at `db_path` for reading, the run/escalation
+    path. Unlike `connect`, this never creates or silently accepts an empty
+    table: it raises LoadError if the file, the `measurements` table, or data for
+    one or more turbines is missing, since a run must never build context from an
+    empty measurements table."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        raise LoadError(f"{db_path} does not exist; run fetch_kelmarsh first.")
+    con = duckdb.connect(str(db_path))
+    con.execute("SET TimeZone='UTC'")
+    tables = con.execute(
+        "SELECT table_name FROM information_schema.tables WHERE table_name = ?", [TABLE_NAME]
+    ).fetchall()
+    if not tables:
+        con.close()
+        raise LoadError(f"{db_path} has no '{TABLE_NAME}' table; run fetch_kelmarsh first.")
+    if not is_populated(con):
+        con.close()
+        raise LoadError(
+            f"{db_path}'s '{TABLE_NAME}' table is missing data for one or more turbines; run fetch_kelmarsh first."
+        )
+    return con
+
+
 def _prepare(con: duckdb.DuckDBPyConnection) -> None:
     con.execute("SET TimeZone='UTC'")
     con.execute(CREATE_TABLE_SQL)
@@ -115,9 +134,7 @@ def build_database(con: duckdb.DuckDBPyConnection, csv_paths: Sequence[Path]) ->
     `csv_paths` into it, allowed columns only. The turbine number comes from each
     file's own `# Turbine: Kelmarsh <n>` comment line, the same as loader.py reads
     for the Status CSVs. Raises LoadError if a file doesn't have the expected
-    comment/header shape; callers that only have some files available (for
-    example fetch.py's best-effort Turbine_Data step) should only pass the files
-    that are actually present."""
+    comment/header shape."""
     con.execute(f"DELETE FROM {TABLE_NAME}")
     for path in csv_paths:
         header_idx, header, turbine_number = _scan_header(path)
