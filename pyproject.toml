@@ -5,10 +5,12 @@ description = "Jev triages wind turbine events, code decides. Companion code for
 requires-python = ">=3.12"
 dependencies = [
     "pyyaml>=6",
+    "typesafe-sdk>=0.7.1",
 ]
 
 [dependency-groups]
 dev = [
+    "httpx2>=2.13.1",
     "pytest>=8",
 ]
 
