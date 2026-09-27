@@ -31,7 +31,15 @@ def run(events, fake, cache=None):
 
 
 def test_rule2_uncertain_cause_sends_to_monitor():
-    j = Judgments(answers(cause={"type": "choice", "value": "fault", "probabilities": {"fault": 0.5}, "confidence": 0.5}, safety_related=0.1))
+    # cause's pick is "fault", so needs_site_visit is still read (a confident no here);
+    # cause's own low confidence is what sends this to monitor.
+    j = Judgments(
+        answers(
+            cause={"type": "choice", "value": "fault", "probabilities": {"fault": 0.5}, "confidence": 0.5},
+            safety_related=0.1,
+            needs_site_visit=0.1,
+        )
+    )
     assert apply_rules(j, status="Stop") == (MONITOR, ["uncertain: cause"])
 
 
@@ -45,21 +53,22 @@ def test_rule2_both_uncertain_lists_both_ids_in_read_order():
         answers(
             cause={"type": "choice", "value": "fault", "probabilities": {"fault": 0.5}, "confidence": 0.5},
             safety_related=0.5,
+            needs_site_visit=0.1,
         )
     )
     assert apply_rules(j, status="Stop") == (MONITOR, ["uncertain: cause, safety_related"])
 
 
-def test_rule2_uncertain_cause_wins_over_a_confident_safety_yes():
-    # Rule 2 is checked before rule 3, so an uncertain cause overrides even a clear
-    # safety_related yes.
+def test_confident_safety_yes_wins_over_an_uncertain_cause():
+    # safety_related is checked before the uncertainty check now, so a confident yes
+    # wins even when cause is uncertain.
     j = Judgments(
         answers(
             cause={"type": "choice", "value": "fault", "probabilities": {"fault": 0.5}, "confidence": 0.5},
             safety_related=0.95,
         )
     )
-    assert apply_rules(j, status="Stop") == (MONITOR, ["uncertain: cause"])
+    assert apply_rules(j, status="Stop") == (ACT_NOW, ["safety"])
 
 
 def test_rule3_safety_related_yes_is_act_now():
@@ -70,6 +79,18 @@ def test_rule3_safety_related_yes_is_act_now():
 def test_rule4_fault_needing_a_site_visit_is_act_now():
     j = Judgments(answers(cause="fault", safety_related=0.1, needs_site_visit=0.9))
     assert apply_rules(j, status="Stop") == (ACT_NOW, ["fault needing a site visit"])
+
+
+def test_confident_fault_with_a_confident_site_visit_wins_over_an_uncertain_safety_related():
+    # The fault + site-visit check is checked before the uncertainty check now, so a
+    # confident yes wins even when safety_related is uncertain.
+    j = Judgments(answers(cause="fault", safety_related=0.5, needs_site_visit=0.9))
+    assert apply_rules(j, status="Stop") == (ACT_NOW, ["fault needing a site visit"])
+
+
+def test_uncertain_needs_site_visit_on_a_fault_sends_to_monitor():
+    j = Judgments(answers(cause="fault", safety_related=0.1, needs_site_visit=0.5))
+    assert apply_rules(j, status="Stop") == (MONITOR, ["uncertain: needs_site_visit"])
 
 
 def test_rule5_fault_not_needing_a_site_visit_is_monitor():
@@ -215,11 +236,11 @@ def test_long_stop_floors_no_action_up_to_monitor():
 
 def test_long_stop_leaves_an_already_higher_triage_alone_but_still_adds_the_reason():
     events = [ev(status="Stop", message="Gearbox bearing fault", duration=30 * 3600)]
-    fake = FakeJev(values=dict(cause="fault", safety_related=0.1, needs_site_visit=0.1))
+    fake = FakeJev(values=dict(cause="fault", safety_related=0.1, needs_site_visit=0.9))
     results = run(events, fake)
 
-    assert results[0].triage == MONITOR
-    assert results[0].reasons == ["fault, remote reset may clear it", "long stop"]
+    assert results[0].triage == ACT_NOW
+    assert results[0].reasons == ["fault needing a site visit", "long stop"]
 
 
 def test_a_short_stop_is_not_marked_long_stop():
@@ -229,6 +250,28 @@ def test_a_short_stop_is_not_marked_long_stop():
 
     assert results[0].triage == NO_ACTION
     assert results[0].reasons == ["planned"]
+
+
+# --- triage(): a long stop and chattering can combine on the same event ---
+
+
+def test_long_stop_and_chattering_combine_on_the_one_event_that_is_both():
+    events = [
+        ev(status="Stop", message="Manual stop", start=T0, duration=30 * 3600),
+        ev(status="Stop", message="Manual stop", start=T0 + timedelta(minutes=1)),
+        ev(status="Stop", message="Manual stop", start=T0 + timedelta(minutes=2)),
+    ]
+    fake = FakeJev(values=dict(cause="planned", safety_related=0.1))
+    results = run(events, fake)
+
+    long_and_chattering, chattering_only, _ = results
+    assert long_and_chattering.chattering is True
+    assert long_and_chattering.triage == MONITOR
+    assert long_and_chattering.reasons == ["planned", "chattering", "long stop"]
+
+    assert chattering_only.chattering is True
+    assert chattering_only.triage == NO_ACTION
+    assert chattering_only.reasons == ["planned", "chattering"]
 
 
 # --- triage(): chattering on a non-informational event adds a reason, not a class change ---

@@ -58,17 +58,19 @@ def apply_rules(j: Judgments, status: str) -> tuple[str, list[str]]:
     """Rules 2-7 for a non-informational event, given a Judgments already wrapping the
     raw judgments for its (status, message) pair. Read order matters for the fan-out:
     cause first, then safety_related always, then needs_site_visit only when cause is
-    fault and safety_related did not already decide the event."""
+    fault. A confident safety_related yes or a confident fault-needing-a-site-visit
+    wins even over an uncertain read elsewhere; the uncertainty check runs after both,
+    so it still catches an uncertain needs_site_visit read on a fault."""
     cause = j.choice("cause")
     safety = j.yes("safety_related")
 
-    if j.uncertain:
-        return MONITOR, [f"uncertain: {', '.join(j.uncertain)}"]
     if safety:
         return ACT_NOW, ["safety"]
+    if cause == FAULT and j.yes("needs_site_visit"):
+        return ACT_NOW, ["fault needing a site visit"]
+    if j.uncertain:
+        return MONITOR, [f"uncertain: {', '.join(j.uncertain)}"]
     if cause == FAULT:
-        if j.yes("needs_site_visit"):
-            return ACT_NOW, ["fault needing a site visit"]
         return MONITOR, ["fault, remote reset may clear it"]
     if cause == RUNNING and status == WARNING:
         return MONITOR, ["warning while running"]
