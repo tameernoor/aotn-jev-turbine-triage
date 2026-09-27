@@ -1,2067 +1,2165 @@
 {
-  "questions_hash": "e92348faa55426d721590399e7166f867717a12b30780802b584ccd35c921359",
+  "questions_hash": "6aa1e0b6a81ab1edeabd5b97afee63572d76e55dc865321d29af619981f33f06",
   "cache": {
     "Stop": {
       "Emergency stop nacelle": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "external": 0.02,
-            "running": 0.0,
-            "fault": 0.86,
-            "planned": 0.12
-          },
-          "confidence": 0.81
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.94
+          "value": 0.99
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.5
+          "value": 0.03
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.39
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.15
         }
       },
       "Emergency stop top box": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "fault": 0.88,
-            "running": 0.0,
-            "planned": 0.09,
-            "external": 0.03
-          },
-          "confidence": 0.83
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.93
+          "value": 0.97
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.5
+          "value": 0.04
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.55
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.22
         }
       },
       "Safety chain open": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "fault": 0.99,
-            "planned": 0.01,
-            "running": 0.0,
-            "external": 0.0
-          },
-          "confidence": 0.99
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.94
+          "value": 0.99
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.06
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.1
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
           "type": "noul",
           "value": 0.59
         }
       },
       "UPS buffer time too short": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "external": 0.21,
-            "fault": 0.78,
-            "planned": 0.01,
-            "running": 0.0
-          },
-          "confidence": 0.7
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.34
+          "value": 0.06
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.37
+          "value": 0.03
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.05
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.57
         }
       },
       "Manual stop - on site": {
-        "cause": {
-          "type": "choice",
-          "value": "planned",
-          "probabilities": {
-            "planned": 1.0,
-            "fault": 0.0,
-            "running": 0.0,
-            "external": 0.0
-          },
-          "confidence": 1.0
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.2
+          "value": 0.04
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.45
+          "value": 0.02
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.96
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.02
         }
       },
       "Test brake program 75": {
-        "cause": {
-          "type": "choice",
-          "value": "planned",
-          "probabilities": {
-            "external": 0.0,
-            "planned": 1.0,
-            "fault": 0.0,
-            "running": 0.0
-          },
-          "confidence": 1.0
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.43
+          "value": 0.04
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.16
+          "value": 0.03
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.94
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.06
         }
       },
       "Test brake program 170": {
-        "cause": {
-          "type": "choice",
-          "value": "planned",
-          "probabilities": {
-            "fault": 0.0,
-            "external": 0.0,
-            "running": 0.0,
-            "planned": 1.0
-          },
-          "confidence": 1.0
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.4
+          "value": 0.04
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.2
+          "value": 0.03
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.94
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.05
         }
       },
       "Test brake program 180": {
-        "cause": {
-          "type": "choice",
-          "value": "planned",
-          "probabilities": {
-            "fault": 0.0,
-            "running": 0.0,
-            "planned": 1.0,
-            "external": 0.0
-          },
-          "confidence": 1.0
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.44
+          "value": 0.04
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.17
+          "value": 0.02
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.94
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.05
         }
       },
       "Manual stop without login": {
-        "cause": {
-          "type": "choice",
-          "value": "planned",
-          "probabilities": {
-            "running": 0.0,
-            "fault": 0.01,
-            "external": 0.0,
-            "planned": 0.99
-          },
-          "confidence": 0.98
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.15
+          "value": 0.03
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.19
+          "value": 0.02
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.91
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.01
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.04
         }
       },
       "Emergency stop base box": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "external": 0.04,
-            "running": 0.0,
-            "fault": 0.88,
-            "planned": 0.08
-          },
-          "confidence": 0.85
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.93
+          "value": 0.97
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_routine": {
           "type": "noul",
           "value": 0.49
-        }
-      },
-      "Manual stop - remote": {
-        "cause": {
-          "type": "choice",
-          "value": "planned",
-          "probabilities": {
-            "fault": 0.0,
-            "running": 0.0,
-            "external": 0.01,
-            "planned": 0.99
-          },
-          "confidence": 0.98
         },
-        "safety_related": {
+        "names_outside_condition": {
           "type": "noul",
-          "value": 0.18
+          "value": 0.02
         },
-        "needs_site_visit": {
+        "names_turbine_problem": {
           "type": "noul",
           "value": 0.12
         }
       },
+      "Manual stop - remote": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.97
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.03
+        }
+      },
       "Frequency converter error": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "running": 0.0,
-            "external": 0.0,
-            "fault": 1.0,
-            "planned": 0.0
-          },
-          "confidence": 1.0
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.3
+          "value": 0.04
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.63
+          "value": 0.06
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.95
         }
       },
       "Battery test": {
-        "cause": {
-          "type": "choice",
-          "value": "planned",
-          "probabilities": {
-            "planned": 1.0,
-            "external": 0.0,
-            "running": 0.0,
-            "fault": 0.0
-          },
-          "confidence": 1.0
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.25
+          "value": 0.03
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.91
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.06
+        }
+      },
+      "Oscillation encoder tower": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.93
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.08
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.14
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.83
+        }
+      },
+      "Grid loss": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.1
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.06
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.97
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.1
+        }
+      },
+      "Low gearbox oil pressure": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.05
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.01
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.98
+        }
+      },
+      "Stop manual operation": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.06
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.94
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.03
+        }
+      },
+      "Tower oscillation Y level 1": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.98
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.05
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.09
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.76
+        }
+      },
+      "Cable autounwind": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.17
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.09
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.5
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.76
+        }
+      },
+      "Deviation winddirection > 60°": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.08
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.93
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.48
+        }
+      },
+      "Repeating error BP52": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.05
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.05
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.69
+        }
+      },
+      "Anemometer defect": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.06
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.97
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.97
+        }
+      },
+      "WEC shut down": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.05
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.41
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.07
+        }
+      },
+      "Yaw error": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.06
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.1
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.97
+        }
+      },
+      "Low hydraulic pressure": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.05
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.01
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.97
+        }
+      },
+      "Test brake program 52": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.95
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.05
+        }
+      },
+      "PLC hardware error": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.09
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.82
+        }
+      },
+      "Yaw speed high": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.69
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.97
+        }
+      },
+      "Yaw velocity too low": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.06
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.97
+        }
+      },
+      "Tower oscillation X level 2": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.98
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.07
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.77
+        }
+      },
+      "Pitch run-away (hub box v.>=4)": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.39
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.08
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.97
+        }
+      },
+      "Stop battery test": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.88
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.04
+        }
+      },
+      "Overload gear oil pump": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.05
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.05
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.01
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.96
+        }
+      },
+      "Park master stop": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.32
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.8
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.1
+        }
+      },
+      "Stop for man. reboot": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.24
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.83
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.07
+        }
+      },
+      "Max. cable twistangle": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.15
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.06
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.85
+        }
+      },
+      "Maximum grid frequency": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.27
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.95
+        },
+        "names_turbine_problem": {
           "type": "noul",
           "value": 0.27
         }
       },
-      "Oscillation encoder tower": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "planned": 0.02,
-            "fault": 0.95,
-            "running": 0.0,
-            "external": 0.03
-          },
-          "confidence": 0.93
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.9
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.61
-        }
-      },
-      "Grid loss": {
-        "cause": {
-          "type": "choice",
-          "value": "external",
-          "probabilities": {
-            "external": 1.0,
-            "planned": 0.0,
-            "running": 0.0,
-            "fault": 0.0
-          },
-          "confidence": 1.0
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.26
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.31
-        }
-      },
-      "Low gearbox oil pressure": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "planned": 0.0,
-            "running": 0.0,
-            "fault": 1.0,
-            "external": 0.0
-          },
-          "confidence": 1.0
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.54
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.51
-        }
-      },
-      "Stop manual operation": {
-        "cause": {
-          "type": "choice",
-          "value": "planned",
-          "probabilities": {
-            "fault": 0.0,
-            "external": 0.0,
-            "planned": 1.0,
-            "running": 0.0
-          },
-          "confidence": 1.0
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.34
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.21
-        }
-      },
-      "Tower oscillation Y level 1": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "fault": 0.7,
-            "running": 0.01,
-            "external": 0.26,
-            "planned": 0.03
-          },
-          "confidence": 0.6
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.94
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.45
-        }
-      },
-      "Cable autounwind": {
-        "cause": {
-          "type": "choice",
-          "value": "planned",
-          "probabilities": {
-            "external": 0.0,
-            "fault": 0.24,
-            "planned": 0.76,
-            "running": 0.0
-          },
-          "confidence": 0.68
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.63
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.54
-        }
-      },
-      "Deviation winddirection > 60°": {
-        "cause": {
-          "type": "choice",
-          "value": "external",
-          "probabilities": {
-            "fault": 0.01,
-            "running": 0.0,
-            "external": 0.99,
-            "planned": 0.0
-          },
-          "confidence": 0.99
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.51
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.34
-        }
-      },
-      "Repeating error BP52": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "planned": 0.0,
-            "fault": 1.0,
-            "running": 0.0,
-            "external": 0.0
-          },
-          "confidence": 1.0
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.37
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.48
-        }
-      },
-      "Anemometer defect": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "running": 0.0,
-            "fault": 1.0,
-            "external": 0.0,
-            "planned": 0.0
-          },
-          "confidence": 1.0
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.47
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.81
-        }
-      },
-      "WEC shut down": {
-        "cause": {
-          "type": "choice",
-          "value": "planned",
-          "probabilities": {
-            "running": 0.0,
-            "fault": 0.38,
-            "planned": 0.48,
-            "external": 0.14
-          },
-          "confidence": 0.3
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.4
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.33
-        }
-      },
-      "Yaw error": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "planned": 0.0,
-            "fault": 0.93,
-            "running": 0.0,
-            "external": 0.07
-          },
-          "confidence": 0.91
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.55
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.51
-        }
-      },
-      "Low hydraulic pressure": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "running": 0.0,
-            "fault": 1.0,
-            "planned": 0.0,
-            "external": 0.0
-          },
-          "confidence": 1.0
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.62
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.41
-        }
-      },
-      "Test brake program 52": {
-        "cause": {
-          "type": "choice",
-          "value": "planned",
-          "probabilities": {
-            "planned": 1.0,
-            "running": 0.0,
-            "external": 0.0,
-            "fault": 0.0
-          },
-          "confidence": 1.0
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.41
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.18
-        }
-      },
-      "PLC hardware error": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "fault": 1.0,
-            "external": 0.0,
-            "planned": 0.0,
-            "running": 0.0
-          },
-          "confidence": 1.0
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.35
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.63
-        }
-      },
-      "Yaw speed high": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "fault": 0.72,
-            "planned": 0.01,
-            "running": 0.0,
-            "external": 0.27
-          },
-          "confidence": 0.63
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.84
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.48
-        }
-      },
-      "Yaw velocity too low": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "planned": 0.02,
-            "fault": 0.73,
-            "running": 0.0,
-            "external": 0.25
-          },
-          "confidence": 0.63
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.33
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.47
-        }
-      },
-      "Tower oscillation X level 2": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "running": 0.01,
-            "fault": 0.66,
-            "planned": 0.02,
-            "external": 0.31
-          },
-          "confidence": 0.55
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.94
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.46
-        }
-      },
-      "Pitch run-away (hub box v.>=4)": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "fault": 0.97,
-            "external": 0.03,
-            "planned": 0.0,
-            "running": 0.0
-          },
-          "confidence": 0.96
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.89
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.72
-        }
-      },
-      "Stop battery test": {
-        "cause": {
-          "type": "choice",
-          "value": "planned",
-          "probabilities": {
-            "running": 0.0,
-            "fault": 0.0,
-            "external": 0.0,
-            "planned": 1.0
-          },
-          "confidence": 1.0
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.2
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.17
-        }
-      },
-      "Overload gear oil pump": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "fault": 1.0,
-            "external": 0.0,
-            "planned": 0.0,
-            "running": 0.0
-          },
-          "confidence": 1.0
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.48
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.58
-        }
-      },
-      "Park master stop": {
-        "cause": {
-          "type": "choice",
-          "value": "planned",
-          "probabilities": {
-            "fault": 0.07,
-            "planned": 0.88,
-            "external": 0.05,
-            "running": 0.0
-          },
-          "confidence": 0.84
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.51
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.32
-        }
-      },
-      "Stop for man. reboot": {
-        "cause": {
-          "type": "choice",
-          "value": "planned",
-          "probabilities": {
-            "planned": 0.95,
-            "fault": 0.05,
-            "external": 0.0,
-            "running": 0.0
-          },
-          "confidence": 0.93
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.57
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.29
-        }
-      },
-      "Max. cable twistangle": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "external": 0.02,
-            "running": 0.0,
-            "fault": 0.92,
-            "planned": 0.06
-          },
-          "confidence": 0.88
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.48
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.54
-        }
-      },
-      "Maximum grid frequency": {
-        "cause": {
-          "type": "choice",
-          "value": "external",
-          "probabilities": {
-            "planned": 0.0,
-            "fault": 0.0,
-            "external": 1.0,
-            "running": 0.0
-          },
-          "confidence": 1.0
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.53
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.21
-        }
-      },
       "Grid error": {
-        "cause": {
-          "type": "choice",
-          "value": "external",
-          "probabilities": {
-            "planned": 0.0,
-            "external": 0.96,
-            "running": 0.0,
-            "fault": 0.04
-          },
-          "confidence": 0.95
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.28
+          "value": 0.05
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.34
-        }
-      },
-      "Frequency converter not ready": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "fault": 1.0,
-            "running": 0.0,
-            "planned": 0.0,
-            "external": 0.0
-          },
-          "confidence": 0.99
+          "value": 0.04
         },
-        "safety_related": {
+        "names_routine": {
           "type": "noul",
-          "value": 0.17
+          "value": 0.03
         },
-        "needs_site_visit": {
+        "names_outside_condition": {
           "type": "noul",
-          "value": 0.47
-        }
-      },
-      "Overvoltage": {
-        "cause": {
-          "type": "choice",
-          "value": "external",
-          "probabilities": {
-            "external": 0.63,
-            "planned": 0.0,
-            "running": 0.0,
-            "fault": 0.37
-          },
-          "confidence": 0.5
+          "value": 0.7
         },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.5
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.37
-        }
-      },
-      "Grid disconnection for self-protection": {
-        "cause": {
-          "type": "choice",
-          "value": "external",
-          "probabilities": {
-            "running": 0.0,
-            "fault": 0.28,
-            "external": 0.72,
-            "planned": 0.0
-          },
-          "confidence": 0.63
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.63
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.33
-        }
-      },
-      "Supply circuit breaker off-state": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "fault": 0.45,
-            "running": 0.0,
-            "external": 0.14,
-            "planned": 0.41
-          },
-          "confidence": 0.25
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.23
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.24
-        }
-      },
-      "Manual brake": {
-        "cause": {
-          "type": "choice",
-          "value": "planned",
-          "probabilities": {
-            "fault": 0.02,
-            "external": 0.0,
-            "planned": 0.98,
-            "running": 0.0
-          },
-          "confidence": 0.98
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.45
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.31
-        }
-      },
-      "Overload yaw motor 2&4": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "planned": 0.0,
-            "external": 0.07,
-            "running": 0.0,
-            "fault": 0.93
-          },
-          "confidence": 0.9
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.55
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.66
-        }
-      },
-      "Hydraulic oil flushing operation": {
-        "cause": {
-          "type": "choice",
-          "value": "planned",
-          "probabilities": {
-            "planned": 1.0,
-            "fault": 0.0,
-            "external": 0.0,
-            "running": 0.0
-          },
-          "confidence": 1.0
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.12
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.17
-        }
-      },
-      "Feedback brake 1": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "planned": 0.18,
-            "external": 0.01,
-            "fault": 0.81,
-            "running": 0.0
-          },
-          "confidence": 0.74
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.47
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.34
-        }
-      },
-      "Pitch angle deviation": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "planned": 0.0,
-            "running": 0.0,
-            "fault": 0.96,
-            "external": 0.04
-          },
-          "confidence": 0.95
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.6
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.5
-        }
-      },
-      "Externally stopped": {
-        "cause": {
-          "type": "choice",
-          "value": "external",
-          "probabilities": {
-            "planned": 0.25,
-            "external": 0.75,
-            "fault": 0.0,
-            "running": 0.0
-          },
-          "confidence": 0.67
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.24
-        },
-        "needs_site_visit": {
+        "names_turbine_problem": {
           "type": "noul",
           "value": 0.19
         }
       },
+      "Frequency converter not ready": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.49
+        }
+      },
+      "Overvoltage": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.09
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.57
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.87
+        }
+      },
+      "Grid disconnection for self-protection": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.23
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.05
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.92
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.08
+        }
+      },
+      "Supply circuit breaker off-state": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.11
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.25
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.31
+        }
+      },
+      "Manual brake": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.89
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.13
+        }
+      },
+      "Overload yaw motor 2&4": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.1
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.98
+        }
+      },
+      "Hydraulic oil flushing operation": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.96
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.01
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.03
+        }
+      },
+      "Feedback brake 1": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.08
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.6
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.43
+        }
+      },
+      "Pitch angle deviation": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.1
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.97
+        }
+      },
+      "Externally stopped": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.78
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.04
+        }
+      },
       "No speed development": {
-        "cause": {
-          "type": "choice",
-          "value": "external",
-          "probabilities": {
-            "external": 0.49,
-            "running": 0.0,
-            "fault": 0.42,
-            "planned": 0.09
-          },
-          "confidence": 0.32
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.42
+          "value": 0.07
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.46
+          "value": 0.03
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.1
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.56
         }
       },
       "Implausible gear speed": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "running": 0.0,
-            "fault": 0.99,
-            "planned": 0.0,
-            "external": 0.01
-          },
-          "confidence": 0.99
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.61
+          "value": 0.24
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.39
+          "value": 0.04
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.95
         }
       },
       "Tower oscillation X level 1": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "fault": 0.64,
-            "external": 0.32,
-            "planned": 0.03,
-            "running": 0.01
-          },
-          "confidence": 0.51
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.93
+          "value": 0.98
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.39
+          "value": 0.05
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.08
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.74
         }
       },
       "Rotor sensor B defective": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "running": 0.0,
-            "fault": 1.0,
-            "external": 0.0,
-            "planned": 0.0
-          },
-          "confidence": 1.0
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.42
+          "value": 0.06
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.86
+          "value": 0.99
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.98
         }
       },
       "Uncontrolled yaw movement": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "external": 0.13,
-            "running": 0.0,
-            "planned": 0.0,
-            "fault": 0.87
-          },
-          "confidence": 0.82
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.86
+          "value": 0.12
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.58
+          "value": 0.03
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.95
         }
       },
       "High rotor speed nacelle": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "fault": 0.51,
-            "planned": 0.01,
-            "external": 0.46,
-            "running": 0.02
-          },
-          "confidence": 0.36
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.85
+          "value": 0.86
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.58
+          "value": 0.04
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.08
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.87
         }
       }
     },
     "Warning": {
       "Brake accumulator defect": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "planned": 0.0,
-            "external": 0.0,
-            "fault": 0.99,
-            "running": 0.01
-          },
-          "confidence": 0.98
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.58
+          "value": 0.04
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.37
+          "value": 0.98
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.01
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.95
         }
       },
       "Overload transformer fan outlet air": {
-        "cause": {
-          "type": "choice",
-          "value": "running",
-          "probabilities": {
-            "planned": 0.0,
-            "running": 0.79,
-            "fault": 0.2,
-            "external": 0.01
-          },
-          "confidence": 0.71
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.14
+          "value": 0.03
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.17
-        }
-      },
-      "Overload transf. fan inlet air": {
-        "cause": {
-          "type": "choice",
-          "value": "running",
-          "probabilities": {
-            "fault": 0.2,
-            "running": 0.7,
-            "external": 0.1,
-            "planned": 0.0
-          },
-          "confidence": 0.6
+          "value": 0.04
         },
-        "safety_related": {
+        "names_routine": {
           "type": "noul",
-          "value": 0.2
+          "value": 0.03
         },
-        "needs_site_visit": {
+        "names_outside_condition": {
           "type": "noul",
-          "value": 0.42
-        }
-      },
-      "Overload generator fan 2": {
-        "cause": {
-          "type": "choice",
-          "value": "running",
-          "probabilities": {
-            "fault": 0.36,
-            "external": 0.05,
-            "running": 0.59,
-            "planned": 0.0
-          },
-          "confidence": 0.45
+          "value": 0.04
         },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.21
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.57
-        }
-      },
-      "Overload generator fan 3": {
-        "cause": {
-          "type": "choice",
-          "value": "running",
-          "probabilities": {
-            "external": 0.03,
-            "planned": 0.0,
-            "running": 0.62,
-            "fault": 0.35
-          },
-          "confidence": 0.49
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.2
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.58
-        }
-      },
-      "Overload generator fan 1": {
-        "cause": {
-          "type": "choice",
-          "value": "running",
-          "probabilities": {
-            "planned": 0.0,
-            "external": 0.04,
-            "fault": 0.38,
-            "running": 0.58
-          },
-          "confidence": 0.44
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.21
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.55
-        }
-      },
-      "Overload gear bypass filter": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "fault": 0.66,
-            "external": 0.01,
-            "planned": 0.0,
-            "running": 0.33
-          },
-          "confidence": 0.54
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.19
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.45
-        }
-      },
-      "Error brake resistor CHP": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "running": 0.01,
-            "external": 0.0,
-            "fault": 0.99,
-            "planned": 0.0
-          },
-          "confidence": 0.98
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.22
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.57
-        }
-      },
-      "No assignment to a PMU": {
-        "cause": {
-          "type": "choice",
-          "value": "running",
-          "probabilities": {
-            "fault": 0.21,
-            "planned": 0.17,
-            "external": 0.13,
-            "running": 0.49
-          },
-          "confidence": 0.32
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.14
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.29
-        }
-      },
-      "Pitch measuring system 1><2": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "planned": 0.0,
-            "fault": 0.61,
-            "running": 0.39,
-            "external": 0.0
-          },
-          "confidence": 0.47
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.2
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.47
-        }
-      },
-      "Error lubrication pump pitch": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "fault": 0.89,
-            "external": 0.0,
-            "planned": 0.0,
-            "running": 0.11
-          },
-          "confidence": 0.85
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.2
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.64
-        }
-      },
-      "Battery charge cycle axis 1 error": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "planned": 0.0,
-            "fault": 0.87,
-            "external": 0.0,
-            "running": 0.13
-          },
-          "confidence": 0.82
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.09
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.44
-        }
-      },
-      "Battery charge cycle axis 2 error": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "planned": 0.0,
-            "fault": 0.82,
-            "running": 0.18,
-            "external": 0.0
-          },
-          "confidence": 0.75
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.1
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.49
-        }
-      },
-      "Battery charge cycle axis 3 error": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "fault": 0.8200000000000001,
-            "external": 0.0,
-            "planned": 0.0,
-            "running": 0.18
-          },
-          "confidence": 0.75
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.1
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.48
-        }
-      },
-      "Limit switch error 95° axis 2": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "fault": 0.93,
-            "planned": 0.0,
-            "external": 0.0,
-            "running": 0.07
-          },
-          "confidence": 0.91
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.38
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.6
-        }
-      },
-      "Service obstacle light": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "external": 0.0,
-            "planned": 0.01,
-            "fault": 0.71,
-            "running": 0.28
-          },
-          "confidence": 0.61
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.14
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.65
-        }
-      },
-      "Breakdown obstacle light": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "fault": 0.83,
-            "external": 0.0,
-            "planned": 0.0,
-            "running": 0.17
-          },
-          "confidence": 0.77
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.16
-        },
-        "needs_site_visit": {
+        "names_turbine_problem": {
           "type": "noul",
           "value": 0.78
         }
       },
-      "Reduced power converter": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "running": 0.24,
-            "external": 0.07,
-            "fault": 0.68,
-            "planned": 0.01
-          },
-          "confidence": 0.58
-        },
-        "safety_related": {
+      "Overload transf. fan inlet air": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.13
+          "value": 0.04
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.46
-        }
-      },
-      "Particle sensor defect": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "external": 0.0,
-            "running": 0.02,
-            "fault": 0.98,
-            "planned": 0.0
-          },
-          "confidence": 0.98
+          "value": 0.04
         },
-        "safety_related": {
+        "names_routine": {
           "type": "noul",
-          "value": 0.1
+          "value": 0.03
         },
-        "needs_site_visit": {
+        "names_outside_condition": {
           "type": "noul",
-          "value": 0.51
-        }
-      },
-      "Timeout brake closed": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "fault": 0.55,
-            "running": 0.09,
-            "planned": 0.01,
-            "external": 0.35
-          },
-          "confidence": 0.4
+          "value": 0.04
         },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.62
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.36
-        }
-      },
-      "Limit switch error 95° axis 3": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "external": 0.0,
-            "planned": 0.0,
-            "fault": 0.88,
-            "running": 0.12
-          },
-          "confidence": 0.84
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.37
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.6
-        }
-      },
-      "Heating/fan top box faulty": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "running": 0.03,
-            "planned": 0.0,
-            "fault": 0.97,
-            "external": 0.0
-          },
-          "confidence": 0.96
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.12
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.49
-        }
-      },
-      "Particle Gear Alarm 10min": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "planned": 0.0,
-            "external": 0.01,
-            "fault": 0.58,
-            "running": 0.41
-          },
-          "confidence": 0.44
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.16
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.43
-        }
-      },
-      "Comm. failure FPM": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "fault": 0.93,
-            "running": 0.07,
-            "planned": 0.0,
-            "external": 0.0
-          },
-          "confidence": 0.91
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.2
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.4
-        }
-      },
-      "Limit switch error 95° axis 1": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "planned": 0.0,
-            "fault": 0.9,
-            "running": 0.1,
-            "external": 0.0
-          },
-          "confidence": 0.87
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.37
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.58
-        }
-      },
-      "Check time synchronization": {
-        "cause": {
-          "type": "choice",
-          "value": "running",
-          "probabilities": {
-            "fault": 0.14,
-            "external": 0.01,
-            "planned": 0.0,
-            "running": 0.85
-          },
-          "confidence": 0.81
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.06
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.14
-        }
-      },
-      "4-20 mA vane 2": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "planned": 0.0,
-            "fault": 0.65,
-            "running": 0.35,
-            "external": 0.0
-          },
-          "confidence": 0.52
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.1
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.5
-        }
-      },
-      "4-20mA anemometer 2": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "planned": 0.0,
-            "running": 0.23,
-            "fault": 0.77,
-            "external": 0.0
-          },
-          "confidence": 0.69
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.11
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.57
-        }
-      },
-      "Vane 2 defect": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "fault": 0.99,
-            "planned": 0.0,
-            "external": 0.0,
-            "running": 0.01
-          },
-          "confidence": 0.99
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.21
-        },
-        "needs_site_visit": {
+        "names_turbine_problem": {
           "type": "noul",
           "value": 0.79
         }
       },
-      "High temp. gear bearing 2": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "external": 0.0,
-            "planned": 0.0,
-            "fault": 0.76,
-            "running": 0.24
-          },
-          "confidence": 0.67
-        },
-        "safety_related": {
+      "Overload generator fan 2": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.23
+          "value": 0.06
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.71
+          "value": 0.04
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.96
         }
       },
-      "High temp. gear bearing 1": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "fault": 0.72,
-            "external": 0.0,
-            "planned": 0.0,
-            "running": 0.28
-          },
-          "confidence": 0.63
-        },
-        "safety_related": {
+      "Overload generator fan 3": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.23
+          "value": 0.05
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.97
+        }
+      },
+      "Overload generator fan 1": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.07
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.97
+        }
+      },
+      "Overload gear bypass filter": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.06
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.07
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.89
+        }
+      },
+      "Error brake resistor CHP": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.14
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.95
+        }
+      },
+      "No assignment to a PMU": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.08
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.19
+        }
+      },
+      "Pitch measuring system 1><2": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.06
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.1
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.81
+        }
+      },
+      "Error lubrication pump pitch": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.06
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.9
+        }
+      },
+      "Battery charge cycle axis 1 error": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.05
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.83
+        }
+      },
+      "Battery charge cycle axis 2 error": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.06
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.88
+        }
+      },
+      "Battery charge cycle axis 3 error": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.05
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.84
+        }
+      },
+      "Limit switch error 95° axis 2": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.05
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.05
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.95
+        }
+      },
+      "Service obstacle light": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.18
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.08
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.47
+        }
+      },
+      "Breakdown obstacle light": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.79
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.58
+        }
+      },
+      "Reduced power converter": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.07
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.12
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.58
+        }
+      },
+      "Particle sensor defect": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.98
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.92
+        }
+      },
+      "Timeout brake closed": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.06
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.09
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_turbine_problem": {
           "type": "noul",
           "value": 0.7
         }
       },
-      "Reduced power gearbox": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "fault": 0.79,
-            "running": 0.2,
-            "external": 0.01,
-            "planned": 0.0
-          },
-          "confidence": 0.72
-        },
-        "safety_related": {
+      "Limit switch error 95° axis 3": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.17
+          "value": 0.04
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.54
+          "value": 0.05
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.95
         }
       },
-      "Battery monitoring test interval": {
-        "cause": {
-          "type": "choice",
-          "value": "planned",
-          "probabilities": {
-            "planned": 0.95,
-            "running": 0.05,
-            "fault": 0.0,
-            "external": 0.0
-          },
-          "confidence": 0.92
-        },
-        "safety_related": {
+      "Heating/fan top box faulty": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.07
+          "value": 0.02
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.18
+          "value": 0.43
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.89
         }
       },
-      "IP duplicate in WF network": {
-        "cause": {
-          "type": "choice",
-          "value": "running",
-          "probabilities": {
-            "fault": 0.15,
-            "external": 0.19,
-            "planned": 0.01,
-            "running": 0.65
-          },
-          "confidence": 0.54
+      "Particle Gear Alarm 10min": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.03
         },
-        "safety_related": {
+        "names_physical_damage": {
           "type": "noul",
           "value": 0.06
         },
-        "needs_site_visit": {
+        "names_routine": {
+          "type": "noul",
+          "value": 0.06
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.62
+        }
+      },
+      "Comm. failure FPM": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.06
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.05
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.74
+        }
+      },
+      "Limit switch error 95° axis 1": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.05
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.05
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.95
+        }
+      },
+      "Check time synchronization": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.3
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.22
+        }
+      },
+      "4-20 mA vane 2": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.05
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.07
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.55
+        }
+      },
+      "4-20mA anemometer 2": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.06
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.06
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.07
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.43
+        }
+      },
+      "Vane 2 defect": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.98
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.97
+        }
+      },
+      "High temp. gear bearing 2": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.06
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.98
+        }
+      },
+      "High temp. gear bearing 1": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.06
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.97
+        }
+      },
+      "Reduced power gearbox": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.09
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.08
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.62
+        }
+      },
+      "Battery monitoring test interval": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.85
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
           "type": "noul",
           "value": 0.11
+        }
+      },
+      "IP duplicate in WF network": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.01
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.09
         }
       },
       "UPS warning": {
-        "cause": {
-          "type": "choice",
-          "value": "running",
-          "probabilities": {
-            "planned": 0.0,
-            "fault": 0.12,
-            "external": 0.18,
-            "running": 0.7
-          },
-          "confidence": 0.59
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.13
+          "value": 0.02
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.2
+          "value": 0.03
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.05
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.09
         }
       },
       "4-20 mA vane 1": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "fault": 0.6,
-            "running": 0.4,
-            "external": 0.0,
-            "planned": 0.0
-          },
-          "confidence": 0.47
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.11
+          "value": 0.02
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.48
+          "value": 0.05
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.09
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.49
         }
       },
       "Vane 1 defect": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "planned": 0.0,
-            "fault": 0.98,
-            "running": 0.02,
-            "external": 0.0
-          },
-          "confidence": 0.98
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.2
+          "value": 0.03
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.78
+          "value": 0.98
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.97
         }
       },
       "P output externally reduced": {
-        "cause": {
-          "type": "choice",
-          "value": "external",
-          "probabilities": {
-            "external": 0.88,
-            "planned": 0.03,
-            "fault": 0.01,
-            "running": 0.08
-          },
-          "confidence": 0.85
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.15
+          "value": 0.04
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.06
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.19
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.09
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.41
+        }
+      },
+      "4-20mA anemometer 1": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.05
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.06
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.09
+        },
+        "names_turbine_problem": {
           "type": "noul",
           "value": 0.38
         }
       },
-      "4-20mA anemometer 1": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "external": 0.0,
-            "planned": 0.0,
-            "fault": 0.74,
-            "running": 0.26
-          },
-          "confidence": 0.64
-        },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.11
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.53
-        }
-      },
       "Max. acceleration": {
-        "cause": {
-          "type": "choice",
-          "value": "running",
-          "probabilities": {
-            "planned": 0.0,
-            "fault": 0.11,
-            "external": 0.31,
-            "running": 0.58
-          },
-          "confidence": 0.45
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.58
+          "value": 0.1
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.31
+          "value": 0.03
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.83
         }
       },
       "Brake pads worn": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "running": 0.4,
-            "planned": 0.0,
-            "fault": 0.6,
-            "external": 0.0
-          },
-          "confidence": 0.46
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.21
+          "value": 0.03
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.1
-        }
-      },
-      "Overload generator heating": {
-        "cause": {
-          "type": "choice",
-          "value": "running",
-          "probabilities": {
-            "external": 0.08,
-            "running": 0.66,
-            "fault": 0.26,
-            "planned": 0.0
-          },
-          "confidence": 0.54
+          "value": 0.99
         },
-        "safety_related": {
-          "type": "noul",
-          "value": 0.23
-        },
-        "needs_site_visit": {
-          "type": "noul",
-          "value": 0.4
-        }
-      },
-      "Pitch batteries charging cycle": {
-        "cause": {
-          "type": "choice",
-          "value": "running",
-          "probabilities": {
-            "planned": 0.13,
-            "external": 0.0,
-            "fault": 0.01,
-            "running": 0.86
-          },
-          "confidence": 0.81
-        },
-        "safety_related": {
+        "names_routine": {
           "type": "noul",
           "value": 0.08
         },
-        "needs_site_visit": {
+        "names_outside_condition": {
           "type": "noul",
-          "value": 0.25
+          "value": 0.01
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.76
+        }
+      },
+      "Overload generator heating": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.04
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.95
+        }
+      },
+      "Pitch batteries charging cycle": {
+        "names_safety_hazard": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_physical_damage": {
+          "type": "noul",
+          "value": 0.03
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.58
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.1
         }
       }
     },
     "Communication": {
       "Data communication unavailable": {
-        "cause": {
-          "type": "choice",
-          "value": "fault",
-          "probabilities": {
-            "running": 0.02,
-            "planned": 0.01,
-            "fault": 0.77,
-            "external": 0.2
-          },
-          "confidence": 0.7
-        },
-        "safety_related": {
+        "names_safety_hazard": {
           "type": "noul",
-          "value": 0.14
+          "value": 0.03
         },
-        "needs_site_visit": {
+        "names_physical_damage": {
           "type": "noul",
-          "value": 0.33
+          "value": 0.03
+        },
+        "names_routine": {
+          "type": "noul",
+          "value": 0.08
+        },
+        "names_outside_condition": {
+          "type": "noul",
+          "value": 0.02
+        },
+        "names_turbine_problem": {
+          "type": "noul",
+          "value": 0.3
         }
       }
     }

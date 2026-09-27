@@ -183,7 +183,7 @@ def _measurement_lines(stats: MeasurementStats) -> list[str]:
     if stats.after_power is not None:
         lines.append(
             f"After the event: power {_fmt_power(stats.after_power)}; "
-            f"power stayed below {int(LOW_POWER_THRESHOLD_KW)} kW for {_fmt_low_power_duration(stats)}."
+            f"{_fmt_low_power(stats)}."
         )
 
     if stats.rotor_after is not None:
@@ -198,6 +198,13 @@ def _measurement_lines(stats: MeasurementStats) -> list[str]:
         lines.append(f"Grid in the hour around the event: {', '.join(grid_parts)}.")
 
     return lines
+
+
+def _fmt_low_power(stats: MeasurementStats) -> str:
+    below = f"power stayed below {int(LOW_POWER_THRESHOLD_KW)} kW for"
+    if stats.low_power_recovered_seconds == 0:
+        return f"power did not drop below {int(LOW_POWER_THRESHOLD_KW)} kW"
+    return f"{below} {_fmt_low_power_duration(stats)}"
 
 
 def _fmt_low_power_duration(stats: MeasurementStats) -> str:

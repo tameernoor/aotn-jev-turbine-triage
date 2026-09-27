@@ -87,7 +87,7 @@ def test_a_row_exactly_at_the_start_counts_as_after_not_straddling():
 
     lines = _lines(event, rows)
 
-    assert lines[0] == "After the event: power 50 kW; power stayed below 50 kW for 0 min."
+    assert lines[0] == "After the event: power 50 kW; power did not drop below 50 kW."
 
 
 def test_a_row_ending_exactly_at_the_start_counts_as_before_not_straddling():
@@ -136,7 +136,7 @@ def test_before_and_after_lines_are_rounded_and_comma_formatted():
     lines = _lines(event, rows)
 
     assert lines[0] == "Before the event: power 1,520 kW, wind 9.8 m/s (60-minute averages)."
-    assert lines[1] == "After the event: power 620 kW; power stayed below 50 kW for 0 min."
+    assert lines[1] == "After the event: power 620 kW; power did not drop below 50 kW."
 
 
 def test_before_line_omits_wind_when_wind_is_missing():
@@ -167,7 +167,7 @@ def test_power_never_drops_below_50kw_gives_zero_duration():
 
     lines = _lines(event, rows)
 
-    assert lines[1] == "After the event: power 580 kW; power stayed below 50 kW for 0 min."
+    assert lines[1] == "After the event: power 580 kW; power did not drop below 50 kW."
 
 
 def test_drop_and_recovery_duration_is_exact_not_a_floor():

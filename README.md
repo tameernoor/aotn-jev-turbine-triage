@@ -27,8 +27,8 @@ into one of three classes:
   do about it.
 
 For the events step 1 leaves monitor because the cause is uncertain or unclear, a
-second step reads the turbine's own production numbers, before Jev is ever asked
-again, and settles some of them in code. See "Step 2" below.
+second step reads the turbine's own production numbers and settles some of them in
+plain code. Jev is not asked again. See "Step 2" below.
 
 Once triage is done, the operator's own IEC 61400-26 category (present on 959 of the
 1,470 non-informational events) is used to check how often the derived cause agrees
@@ -117,10 +117,6 @@ no call at all. `--cache FILE` seeds the run from a committed cache (for example
 back to `FILE` itself; the merged result still lands in `out/judgments.json` as usual.
 A `FILE` that does not exist is not an error: it is treated as an empty starting
 cache.
-
-`results/judgments-2016.json` and `results/summary-2016.json` currently hold answers
-from the earlier, three-question version of this project (see "Previous version"
-below); a real run against this version's five questions replaces them.
 
 To reproduce `## Measured` without calling Jev, once `data/raw/kelmarsh.duckdb`
 exists (step 1 is seeded from the cache; step 2 reads production numbers from that
@@ -231,20 +227,21 @@ events step 2 looks at rather than once per event, and the same query also rende
 the plain-text context written to `out/triage.jsonl` (`step1_triage`, `step1_reasons`
 and `context`) for every event step 2 looked at, whether or not the rules above ended
 up changing anything, so a person reading the monitor pile can see the numbers behind
-the decision. A real example, Kelmarsh 1, a Stop with the message "Frequency
-converter error", 2016-01-24 16:51:17:
+the decision. A real example, Kelmarsh 2, a Warning with the message "Comm. failure
+FPM", 2016-02-09 13:43:36. Step 1 could not tell whether the message names a turbine
+problem (`names_turbine_problem` came back uncertain), so the cause was unclear:
 
 ```
-Before the event: power 600 kW, wind 7.7 m/s (60-minute averages).
-After the event: power 0 kW; power stayed below 50 kW for at least 17 h 30 min, then no power data.
-Grid in the hour around the event: frequency 49.93 to 50.02 Hz, voltage 690 to 697 V.
+Before the event: power 1,440 kW, wind 9.8 m/s (60-minute averages).
+After the event: power 690 kW; power did not drop below 50 kW.
+Grid in the hour around the event: frequency 49.97 to 50.06 Hz, voltage 688 to 716 V.
 Same message on this turbine in the previous 7 days: 0 times.
 Other turbines stopped in the same 10 minutes: no.
 ```
 
-That event's after_power is unknown (no power data at all, only the below-50kW
-duration before the data stopped), so step 2 leaves it exactly as step 1 had it,
-still monitor, with this text written alongside it so a person can see why.
+The turbine kept producing, so step 2 sets the cause to `running` and the triage to
+no action. The operator files this message as full performance, so here the rule
+agrees with the answer key.
 
 Only five 10-minute columns ever reach the context builder, `Power (kW)`, `Wind speed
 (m/s)`, `Rotor speed (RPM)`, `Grid frequency (Hz)` and `Grid voltage (V)`, physical
@@ -264,8 +261,8 @@ by the wind farm operator independently of this project. Jev never sees it: only
 `status` and `message` go into the questions.
 
 The question wording in `questions/event.yaml` was frozen before the first run
-against real data (one wording change made from the wording alone, before any run,
-after the Task 1 review: see "Previous version" below), so there was no chance to
+against real data (one wording change made from the question wording alone, before any
+run: see "Previous version" below), so there was no chance to
 adjust the wording after seeing how Jev did.
 
 The mapping from the operator's IEC category to the `cause` bucket the questions
@@ -317,11 +314,66 @@ no 10-minute data at all, gets neither rule and stays exactly as step 1 left it:
 
 ## Measured
 
-<TBD by real run>
+One run against `jev-1.13.0` over all of 2016 for the six turbines, with the questions
+frozen before it. The answers are in `results/judgments-2016.json` and the run's
+summary in `results/summary-2016.json`, so the numbers reproduce without calling Jev.
 
-## Measured: step 2
+### Speed and cost
 
-<TBD by real run>
+98 Jev requests, one per distinct (status, message) pair, five questions each: 79,721
+input tokens, $0.0033 and 28 seconds for the whole year. Step 2 makes no Jev call.
+
+### Cause against the operator's own category
+
+Over the 959 events with an IEC category:
+
+| | Agrees with the operator | Cause unclear | Confidently wrong |
+|---|---|---|---|
+| Five literal questions (step 1) | 663 (69 %) | 253 | 43 |
+| Plus the production rules (step 2) | 697 (73 %) | 211 | 51 |
+| Previous version, three broad questions | 717 (75 %) | 120 unsure | 122 |
+
+"Confidently wrong" means a cause the code acted on that does not match the
+operator's category. In the previous version, "unsure" means a `cause` answer below
+0.6 confidence.
+
+- The literal questions are wrong with confidence far less often (43 events against
+  122) and say "unclear" far more often (253 against 120). Headline agreement drops
+  from 75 % to 69 %.
+- Where a message uses the words a question looks for, the answer is clear. The three
+  "Overload generator fan" warnings (117 events), which the previous version called
+  `running`, now come out as `fault`, matching the operator.
+- Where it does not, Jev hesitates, and it hesitates on exactly the question a reader
+  would. "Cable autounwind" (68 events) came back near 0.5 on both "is this a routine
+  procedure?" and "does this name a turbine problem?". "Frequency converter not
+  ready", "Safety chain open" and the tower oscillation messages came back uncertain on
+  "does this name an error, fault or failure?", because the words are not there.
+- One uncertain answer on the cause questions makes the cause unclear. That is a rule
+  in code, and it is strict on purpose: it sends the event to a person instead of
+  guessing. A looser rule would score higher and guess more.
+- By distinct message, 34 of 61 agree (56 %), and the cause is unclear for 22 of them.
+
+### Step 2
+
+Step 2 looked at 494 events whose cause was unclear. 109 kept producing and went to
+no action with cause `running`; 42 of those carry an IEC category and 34 of them agree
+with the operator. 236 had stopped and stayed at monitor as "stopped, cause unclear",
+with the numbers written beside them. The other 149 were left as they were: 82 had no
+power data after the event, and 67 produced in the hour after but had dipped below
+50 kW first, which neither rule covers.
+
+### Triage
+
+act_now 181, monitor 817, no action 13,021. Before step 2, monitor was 926 and no
+action 12,912. "Brake accumulator defect" (96 events) is most of act_now, because
+`names_physical_damage` answers yes to "defect". The operator left most of those
+without a category, so this data cannot say whether they deserved it.
+
+What this shows: splitting one broad question into literal ones, as TypeSafe
+recommends, did not raise the score. It changed the kind of mistake. The model stops
+guessing where the text does not say, and the code sends those events to a person.
+For triage, where a confident "no action" on a real fault is the expensive error,
+that is arguably the better trade. The cost is a bigger pile for people to look at.
 
 ## Previous version
 
@@ -335,8 +387,8 @@ We have already seen which messages scored wrong under those broader questions. 
 five questions above were written from TypeSafe's guidance and general turbine
 vocabulary; they name no message that scored wrong, apart from the procedures the
 earlier version already named (cable unwinding, oil flushing). They were frozen
-before any run against real data, with one wording change made after the Task 1
-review, from the question wording alone, before any run: abnormal readings such as
+before any run against real data, with one wording change made from the question
+wording alone, before any run: abnormal readings such as
 "too high" or "at its limit" had no question claiming them, so `names_turbine_problem`
 was widened to cover them. They were not changed after that.
 
