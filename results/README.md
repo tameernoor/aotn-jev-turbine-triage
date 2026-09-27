@@ -1,16 +1,19 @@
 # results
 
-Holds the artifacts from the real runs this project's README `## Measured` and
-`## Measured: step 2` sections describe: `results/judgments-2016.json` (step 1's full
-Jev judgments cache for the 2016 Kelmarsh data, in the same format `out/judgments.json`
-uses), `results/judgments-context-2016.json` (step 2's cache, same idea, in the same
-format `out/judgments-context.json` uses), `results/summary-2016.json` (the step-1 run's `out/summary.json`) and
-`results/summary-context-2016.json` (the step-2 run's `out/summary.json`; its step-1
-usage is zero because step 1 was read from `results/judgments-2016.json`).
+Holds the artifacts from the one real run this project's README `## Measured` and
+`## Measured: step 2` sections describe. `results/judgments-2016.json` is step 1's
+full Jev judgments cache for the 2016 Kelmarsh data, in the same format
+`out/judgments.json` uses, and `results/summary-2016.json` is that run's
+`out/summary.json`. Step 2 (the turbine's production numbers) needs no cache of its
+own, since it never calls Jev; it only reads `data/raw/kelmarsh.duckdb`.
 
-None of these files is written by this repository's code. They are placed here by
-hand after a real run against the full dataset, so a reader can reproduce the numbers
-in `## Measured` and `## Measured: step 2` without spending anything on Jev: see the
+Neither file is written by this repository's code. They are placed here by hand after
+a real run against the full dataset, so a reader can reproduce the numbers in
+`## Measured` and `## Measured: step 2` without spending anything on Jev: see the
 README's "How to fetch and run" section for `--cache results/judgments-2016.json`
-(with `--no-context`, to reproduce step 1 alone) and `--context-cache
-results/judgments-context-2016.json` alongside it, to reproduce both steps.
+(add `--no-context` to reproduce step 1 alone, without needing
+`data/raw/kelmarsh.duckdb` at all).
+
+Until a real run against this version's five questions replaces them, both files
+still hold answers from the earlier, three-question version of this project (see the
+README's "Previous version" section).

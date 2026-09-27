@@ -1,14 +1,17 @@
 """Builds plain-text context for one or more events, from their own turbines'
 10-minute measurements (measurements.py, sql/context.sql) and the full event list
-(loader.py). A later step sends the rendered text to Jev alongside `status` and
-`message` when step 1 is uncertain about an event.
+(loader.py). Step 2 (escalate.py) reads the same numbers this renders (after_power,
+low_power_recovered_seconds) to decide what happened, and writes the rendered text
+onto `out/triage.jsonl` so a person reading the monitor pile can see them too.
 
 The measurement numbers (before/after means, the below-50kW duration, rotor, grid
 min/max) come from ONE SQL query over every event passed in at once
 (`measurement_stats`): pass the whole batch of events to escalate to
-`measurement_stats`/`build_contexts` in a single call, not one call per event.
-Everything else here (rendering, and the three history lines) is plain Python over
-the in-memory event list.
+`measurement_stats` in a single call, not one call per event; `render_contexts`
+turns an already-computed batch of MeasurementStats into text without querying
+again, and `build_contexts` is the one-call convenience that does both. Everything
+else here (rendering, and the three history lines) is plain Python over the
+in-memory event list.
 
 Window rules:
 
@@ -117,6 +120,16 @@ def build_contexts(events: Sequence[Event], con: duckdb.DuckDBPyConnection, all_
     selected for escalation), one SQL query total. `all_events` is the full,
     all-turbine event list the history lines are computed from."""
     stats = measurement_stats(con, events)
+    return render_contexts(events, stats, all_events)
+
+
+def render_contexts(
+    events: Sequence[Event], stats: Sequence[MeasurementStats], all_events: Sequence[Event]
+) -> list[str]:
+    """The rendering half of build_contexts, split out so a caller that also
+    needs the raw MeasurementStats (escalate.py's production-numbers rules) can
+    call measurement_stats itself once and reuse the result here, instead of
+    paying for the query twice."""
     return [
         "\n".join(_measurement_lines(s) + _history_lines(event, all_events))
         for event, s in zip(events, stats)

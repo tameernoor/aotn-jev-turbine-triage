@@ -4,9 +4,9 @@ and decides act_now / monitor / no_action from all five plus the code checks in
 checks.py. See docs/plan-v3-literal.md's "Cause, derived in code" and "Triage rules
 (step 1)" sections.
 
-`apply_rules` is the old three-question rule set, kept only because escalate.py's step 2
-still uses it (questions/event_with_context.yaml); `triage()` no longer calls it. Task 2
-removes it.
+Step 2 (escalate.py) no longer asks Jev again: it reads the turbine's own production
+numbers for events this file left monitor with an unclear cause, and turns them into
+a triage.py-shaped (triage, reasons, cause) with plain code rules.
 """
 
 from __future__ import annotations
@@ -73,13 +73,12 @@ class TriageResult:
     # event, which is never asked about and so never gets a cause at all.
     cause: str | None = None
     # Step 2 (escalate.py) fields. None for an event step 1 was not uncertain
-    # about, since it was never escalated. When set, `triage`/`reasons` above
-    # already hold the step-2 result; step 1's own triage and reasons are kept
-    # here instead.
+    # about, or step 2 was skipped (--no-context), since it was never
+    # escalated. When set, `triage`/`reasons`/`cause` above already hold the
+    # step-2 result; step 1's own triage and reasons are kept here instead.
     step1_triage: str | None = None
     step1_reasons: list[str] | None = None
     context: str | None = None
-    step2_judgments: dict[str, dict] | None = None
 
 
 def derive_cause(j: Judgments, status: str) -> str:
@@ -120,29 +119,6 @@ def apply_step1_rules(j: Judgments, status: str) -> tuple[str, list[str], str]:
     if cause == RUNNING:
         return MONITOR, ["warning while running"], cause
     return NO_ACTION, [cause], cause
-
-
-def apply_rules(j: Judgments, status: str) -> tuple[str, list[str]]:
-    """Rules 2-7 for a non-informational event, given a Judgments already wrapping the
-    raw judgments for its (status, message) pair. Read order matters for the fan-out:
-    cause first, then safety_related always, then needs_site_visit only when cause is
-    fault. A confident safety_related yes or a confident fault-needing-a-site-visit
-    wins even over an uncertain read elsewhere; the uncertainty check runs after both,
-    so it still catches an uncertain needs_site_visit read on a fault."""
-    cause = j.choice("cause")
-    safety = j.yes("safety_related")
-
-    if safety:
-        return ACT_NOW, ["safety"]
-    if cause == FAULT and j.yes("needs_site_visit"):
-        return ACT_NOW, ["fault needing a site visit"]
-    if j.uncertain:
-        return MONITOR, [f"uncertain: {', '.join(j.uncertain)}"]
-    if cause == FAULT:
-        return MONITOR, ["fault, remote reset may clear it"]
-    if cause == RUNNING and status == WARNING:
-        return MONITOR, ["warning while running"]
-    return NO_ACTION, [cause]
 
 
 async def _judgments_for(event: Event, ask: AskFn, questions: dict[str, dict], cache: Cache) -> dict[str, dict]:

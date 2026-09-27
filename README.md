@@ -1,34 +1,38 @@
 # jev-turbine-triage
 
 A small companion example for the aotn series. It reads real wind turbine event logs
-from the Kelmarsh wind farm, asks Jev a few narrow questions about each kind of event,
-and lets plain code decide what to do about the stream: act now, monitor, or no action.
-It also scores Jev honestly against the wind farm operator's own fault category for
-each event, a label this project did not write and did not tune against after seeing
-Jev's answers.
+from the Kelmarsh wind farm, asks Jev five literal yes/no questions about each kind of
+event, and lets plain code sort the stream into act now, monitor, or no action. It also
+scores Jev honestly against the wind farm operator's own fault category for each event,
+a label this project did not write and did not tune against after seeing Jev's answers.
 
 ## What it shows
 
-Six Senvion MM92 turbines logged 14,019 events in 2016: alarms, stops, warnings and
-informational messages. Most of that is noise: 12,549 of the events are informational
-and never reach Jev. The other 1,470 events are where triage matters.
+Six Senvion MM92 turbines logged 14,019 events in 2016, a mix of alarms, stops,
+warnings and informational messages. Most of that is noise: 12,549 of the events are
+informational and never reach Jev. The other 1,470 events are where triage matters.
 
-For each of those, Jev is asked three narrow questions, once per distinct
+For each of those, Jev is asked five literal yes/no questions, once per distinct
 `(status, message)` pair rather than once per event, since the same alarm text repeats
-thousands of times. Plain code then combines Jev's answers with a few checks that need
-no model at all (an alarm that repeats fast is chattering, a pile of alarms across the
-farm at once is a flood, a stop that drags on is a long stop) to sort every event into
-one of three classes:
+thousands of times. Each question asks one narrow thing about the message text; code
+combines the five answers into a cause, and combines the cause with a few checks that
+need no model at all (an alarm that repeats fast is chattering, a pile of alarms across
+the farm at once is a flood, a stop that drags on is a long stop) to sort every event
+into one of three classes:
 
-- **act_now**: a safety-related event, or a fault that needs a technician on site.
+- **act_now**: a safety-related event, or physical damage to a part.
 - **monitor**: a fault that might clear itself remotely, a warning while the turbine
   is still running, a long stop, or an uncertain read the rules refuse to guess past.
 - **no_action**: informational noise, or a planned or external event with nothing to
   do about it.
 
+For the events step 1 leaves monitor because the cause is uncertain or unclear, a
+second step reads the turbine's own production numbers, before Jev is ever asked
+again, and settles some of them in code. See "Step 2" below.
+
 Once triage is done, the operator's own IEC 61400-26 category (present on 959 of the
-1,470 non-informational events) is used to check how often Jev's read of the cause
-agrees with what the operator actually recorded.
+1,470 non-informational events) is used to check how often the derived cause agrees
+with what the operator actually recorded.
 
 ## Data and licence
 
@@ -52,14 +56,16 @@ cp .env.example .env
 
 Fetch the real 2016 data into `data/raw/` (downloads from Zenodo, or copies from a
 local mirror if `--from DIR` or `KELMARSH_LOCAL_DIR` points at one). This also builds
-`data/raw/kelmarsh.duckdb`, the 10-minute measurements step 2 reads its context from:
+`data/raw/kelmarsh.duckdb`, the 10-minute measurements step 2 reads its production
+numbers from:
 
 ```
 uv run python scripts/fetch_kelmarsh.py
 ```
 
 Run the full pipeline against it. This needs `TYPESAFE_API_KEY` in the environment
-(`.env`, loaded by `--env-file`):
+(`.env`, loaded by `--env-file`) for step 1; step 2 never calls Jev, so it needs no key
+either way:
 
 ```
 uv run --env-file .env python -m jev_turbine run
@@ -73,9 +79,9 @@ of `data/raw/kelmarsh.duckdb`):
 uv run --env-file .env python -m jev_turbine run --sample
 ```
 
-`run` does step 1, then step 2 (see "Step 2: context" below), by default. `--no-context`
-skips step 2 entirely, building no context and opening no DuckDB at all, not even to
-check that `data/raw/kelmarsh.duckdb` exists.
+`run` does step 1, then step 2 (see "Step 2" below), by default. `--no-context` skips
+step 2 entirely, reading no production numbers and opening no DuckDB at all, not even
+to check that `data/raw/kelmarsh.duckdb` exists:
 
 ```
 uv run --env-file .env python -m jev_turbine run --no-context
@@ -91,114 +97,142 @@ where output is written (default `out/`). Each run writes:
   hash does not match the questions this run is using, the cache is not trusted, is
   ignored instead of silently serving stale answers, and the run says so, on stdout
   and in `out/summary.json`.
-- `out/judgments-context.json`: step 2's answers, the same idea but keyed by the exact
-  `status`/`message`/`context` state sent to Jev, since the context is specific to one
-  event rather than shared across a whole distinct pair. Carries a hash of
-  `questions/event_with_context.yaml`, checked and reported the same way. Not written
-  at all when `--no-context` is given.
 - `out/triage.jsonl`: one JSON line per event, in event order, with the turbine,
-  start and end timestamps, duration, status, message, the final triage class and the
-  reasons behind it, and whether it was flagged as chattering or part of a flood, plus
-  `step1_triage`, `step1_reasons`, `context` and `step2_judgments`, all `null` for an
-  event that step 1 was not uncertain about and so was never escalated.
-- `out/evaluation.json`: the accuracy report described below, now also comparing step
-  1 alone against step 1 plus step 2.
+  start and end timestamps, duration, status, message, the derived cause, the final
+  triage class and the reasons behind it, and whether it was flagged as chattering or
+  part of a flood, plus `step1_triage`, `step1_reasons` and `context`, all `null` for
+  an event that step 1 was not uncertain about and so was never looked at again in
+  step 2.
+- `out/evaluation.json`: the accuracy report described below, comparing step 1 alone
+  against step 1 plus step 2.
 - `out/summary.json`: the same summary printed at the end, as JSON: triage counts,
-  the top act_now messages, evaluation accuracy (step 1 alone, and with step 2 when it
-  ran), and how many Jev calls step 1 made,
-  at what token count, cost and wall time, plus the model ids seen, and the same five
-  numbers again for step 2, kept separate.
+  the top act_now messages, evaluation accuracy (step 1 alone, and with step 2), and
+  how many Jev calls step 1 made, at what token count, cost and wall time, plus the
+  model ids seen.
 
-Jev itself is only ever built the first time a question is actually asked, in either
-step, so a run whose caches already cover everything needs no `TYPESAFE_API_KEY` and
-makes no call at all. One client is shared between step 1 and step 2 and closed once,
-after both are done. `--cache FILE` and `--context-cache FILE` seed the run from
-committed answers (each seeds the run from that file instead of the matching `out/`
-file, without ever writing back to it; the merged result still lands in
-`out/judgments.json` / `out/judgments-context.json` as usual), but a `FILE` that does
-not exist is not an error: it is treated as an empty starting cache, so a `--cache`
-without a matching `--context-cache` (or `--no-context`) still runs step 2 for real,
-against Jev, paying for every escalated call.
+Jev itself is only ever built the first time a question is actually asked in step 1,
+so a run whose cache already covers every pair needs no `TYPESAFE_API_KEY` and makes
+no call at all. `--cache FILE` seeds the run from a committed cache (for example
+`results/judgments-2016.json`), instead of `out/judgments.json`, without ever writing
+back to `FILE` itself; the merged result still lands in `out/judgments.json` as usual.
+A `FILE` that does not exist is not an error: it is treated as an empty starting
+cache.
 
-To reproduce `## Measured` (step 1 only) without calling Jev:
+`results/judgments-2016.json` and `results/summary-2016.json` currently hold answers
+from the earlier, three-question version of this project (see "Previous version"
+below); a real run against this version's five questions replaces them.
 
-```
-uv run python -m jev_turbine run \
-  --cache results/judgments-2016.json --no-context
-```
-
-With `results/judgments-context-2016.json` (see `## Measured: step 2`), this
-reproduces both steps without calling Jev at all:
+To reproduce `## Measured` without calling Jev, once `data/raw/kelmarsh.duckdb`
+exists (step 1 is seeded from the cache; step 2 reads production numbers from that
+file, no key needed either way):
 
 ```
-uv run python -m jev_turbine run \
-  --cache results/judgments-2016.json \
-  --context-cache results/judgments-context-2016.json
+uv run python -m jev_turbine run --cache results/judgments-2016.json
 ```
+
+Add `--no-context` to reproduce step 1 alone, without needing
+`data/raw/kelmarsh.duckdb` at all.
 
 ## Questions
 
 Jev sees only `status` and `message` for each distinct pair, never the operator's own
 category, the service contract label, or the vendor code.
 
-| id | type | asks |
-| --- | --- | --- |
-| `cause` | choice: fault / planned / external / running | What most likely caused this event? |
-| `safety_related` | yes/no | Does this event indicate a risk to people or to the turbine's structure? |
-| `needs_site_visit` | yes/no | Would a technician most likely have to go to the turbine to fix this? |
+| id | asks |
+| --- | --- |
+| `names_safety_hazard` | Does `message` name an emergency stop, a safety chain, overspeed, excessive rotor speed, tower oscillation or vibration, fire or smoke? |
+| `names_physical_damage` | Does `message` say that a part is worn, broken, leaking or defective? |
+| `names_routine` | Does `message` describe a test, maintenance, a manual or remote stop by people, a stop requested by the owner or park controller, or a routine procedure such as cable unwinding or oil flushing? |
+| `names_outside_condition` | Does `message` name the power grid, grid frequency, grid voltage, a grid loss, or the wind being too weak, too strong or from the wrong direction? |
+| `names_turbine_problem` | Does `message` name an error, fault, failure, defect, timeout, overload or trip, or a reading that is too high, too low, at its limit, deviating or implausible, in a part or system of the turbine itself? |
 
-## Triage rules
+All five are yes/no questions (`noul`), all sent to Jev in one request per distinct
+`(status, message)` pair. `src/jev_turbine/triage.py` reads `names_routine`, then
+`names_outside_condition`, then `names_turbine_problem`, in that order, and stops at
+the first one that decides the cause (`planned`, `external` or `fault`). If all three
+say no, the cause is `running` when the status is Warning, otherwise `unclear`. An
+uncertain answer anywhere in that chain stops it early too, and the cause is
+`unclear`. `names_safety_hazard` and `names_physical_damage` are read for every
+non-informational event regardless of what the cause chain decides.
 
-Safety comes first. In order:
+### Why these questions
+
+An earlier version of this project asked three broader questions instead: a hidden
+cause picked from four words, a yes/no on safety, and a forecast of whether a
+technician would need to visit. TypeSafe's own documentation, at docs.typesafe.ai,
+says why that was the wrong shape for a yes/no model.
+
+> System One models work best when each question asks one specific, well-scoped
+> thing.
+
+> If the question you want to ask would require extended reasoning or weighs multiple
+> independent factors, decompose it.
+
+> Ask each factor as a separate question, then combine the results with logic in your
+> code.
+
+A `noul` question is meant for "the kind of judgment a highly knowledgeable person
+could make in a few seconds", not a forecast and not four competing factors folded
+into one word. `cause` asked for exactly that kind of hidden, multi-factor judgment;
+`needs_site_visit` asked Jev to predict the future. The five questions above each ask
+about one thing the message text either does or does not say, and `triage.py` does
+the combining.
+
+## Rules
+
+Safety and physical damage come first. In order:
 
 1. An informational event that is not chattering needs no action, and Jev is not
    asked about it at all.
-2. Anything Jev reads as safety-related, confidently, is act_now, whatever else is
-   true about it.
-3. A confident fault that would need a site visit is also act_now, even if some other
-   read on the same event was uncertain.
-4. Past that, if any answer the rules actually looked at was uncertain, the event
-   goes to monitor with an "uncertain" reason. It is never silently dropped to
-   no_action.
-5. A fault that does not need a site visit goes to monitor, since a remote reset
-   might clear it.
-6. A warning while the turbine is still running goes to monitor.
-7. Everything else, planned or external activity, or running without a warning, is
-   no_action.
+2. `names_safety_hazard` read as a confident yes is act_now, whatever else is true
+   about the event.
+3. `names_physical_damage` read as a confident yes is also act_now.
+4. Past that, if any question the rules actually read was uncertain, or the derived
+   cause came out unclear, the event goes to monitor with an "uncertain" or "cause
+   unclear" reason. It is never silently dropped to no_action.
+5. A cause of `fault` goes to monitor, since a remote reset might clear it.
+6. A cause of `running` while the status is Warning goes to monitor.
+7. Everything else, a cause of `planned` or `external`, is no_action.
 
 Three checks run over the whole stream with no model involved, and layer on top of
-that decision: a message repeating three or more times within ten minutes on one
+that decision. A message repeating three or more times within ten minutes on one
 turbine is chattering (an informational event that chatters is bumped to monitor;
 anything else just gets the reason added); more than ten non-informational events
 starting within ten minutes anywhere on the farm is flagged as a flood; and a stop
 lasting more than 24 hours is a long stop, which floors the event at monitor and adds
 its own reason.
 
-## Step 2: context
+## Step 2: production numbers as code rules
 
-Step 1 leaves some events at monitor because an answer was genuinely uncertain, not
-because of a code check like chattering or a long stop. For exactly those events,
-step 2 asks Jev the same three questions again, now with a paragraph of plain-English
-context added, computed by code from the turbine's own 10-minute measurements and its
-event history, rather than left for Jev to guess at from three or four words of alarm
-text.
+Step 1 leaves some events at monitor because the derived cause came out unclear, not
+because of a code check like chattering or a long stop. For exactly those events
+(other than ones where the uncertainty was in `names_safety_hazard` or
+`names_physical_damage`, which always stay monitor untouched), step 2 looks at the
+turbine's own production numbers and decides two things with plain code, no Jev call:
 
-The measurement numbers in that paragraph, mean power and wind before the event, mean
-power and rotor speed after it (rotor speed only where the data has it, about half
-the escalated events), how long power stayed below 50 kW, and grid frequency
-and voltage around the event, come from one SQL query, `src/jev_turbine/sql/context.sql`,
-run once over the whole batch of events being escalated rather than once per event. A
-reader can check the arithmetic directly there instead of trusting a description of
-it. The few counts alongside them, how many times the same message started on this
-turbine in the previous 7 days, what non-informational event happened just before it,
-whether another turbine also stopped in the same 10 minutes, come from plain Python
-instead (`_history_lines` in `context.py`), reading the in-memory event list rather
-than the database. Everything is rounded before it reaches Jev, power to 10 kW, wind
-to 0.1 m/s, frequency to 0.01 Hz, voltage to 1 V, durations to the nearest 10 minutes.
-Missing data is said, not guessed, for example "No 10-minute data around this event."
+- **Kept producing**: the mean power in the hour after the event is known, at least
+  50 kW, and it never dropped below 50 kW afterwards. The cause becomes `running`,
+  the triage becomes no_action, and the reason is "kept producing".
+- **Stopped**: the mean power after the event is known and below 50 kW. The triage
+  stays monitor, with the reason "stopped, cause unclear" in place of the earlier
+  uncertainty reason. The cause stays `unclear`.
+- Anything else, including an event with no power data at all, is left exactly as
+  step 1 had it.
 
-A real example, Kelmarsh 1, a Stop with the message "Frequency converter error",
-2016-01-24 16:51:17:
+Jev is not asked a second time, because these numbers are not a judgment call. Whether
+a turbine kept producing after an event is a fact the SCADA log already records, not
+something that needs weighing or wording. Re-asking Jev the same three questions with
+a paragraph of context added, as an earlier version of this project did, spent money
+asking a model to read a number a `>=` in Python reads for free.
+
+The numbers themselves come from one DuckDB query
+(`src/jev_turbine/context.py:measurement_stats`), run once over the whole batch of
+events step 2 looks at rather than once per event, and the same query also renders
+the plain-text context written to `out/triage.jsonl` (`step1_triage`, `step1_reasons`
+and `context`) for every event step 2 looked at, whether or not the rules above ended
+up changing anything, so a person reading the monitor pile can see the numbers behind
+the decision. A real example, Kelmarsh 1, a Stop with the message "Frequency
+converter error", 2016-01-24 16:51:17:
 
 ```
 Before the event: power 600 kW, wind 7.7 m/s (60-minute averages).
@@ -208,15 +242,9 @@ Same message on this turbine in the previous 7 days: 0 times.
 Other turbines stopped in the same 10 minutes: no.
 ```
 
-`questions/event_with_context.yaml` asks the same three questions as step 1, word for
-word, with `status`, `message` and now this `context` text as the basis for each
-answer. Every escalated event's final triage is step 2's, whatever that turns out to
-be, not only when it is confident or different from step 1's; step 1's own triage and
-reasons are kept alongside it (`step1_triage`, `step1_reasons` in `out/triage.jsonl`)
-rather than discarded. If step 2 is itself uncertain, the event stays at monitor with
-step 2's own uncertain reason instead of step 1's. Two escalated events whose
-`status`, `message` and rendered `context` are all identical share one answer instead
-of asking Jev twice.
+That event's after_power is unknown (no power data at all, only the below-50kW
+duration before the data stopped), so step 2 leaves it exactly as step 1 had it,
+still monitor, with this text written alongside it so a person can see why.
 
 Only five 10-minute columns ever reach the context builder, `Power (kW)`, `Wind speed
 (m/s)`, `Rotor speed (RPM)`, `Grid frequency (Hz)` and `Grid voltage (V)`, physical
@@ -225,10 +253,9 @@ Every other column in the source data, anything about lost production, availabil
 curtailment, contractual energy budgets or capacity, and the event log's own `Service
 contract category`, `IEC category` and `Code` fields, is excluded structurally. The
 loader (`measurements.py`) only has room for the five allowed columns in the table it
-builds, so nothing else can reach a Jev prompt through it. Those excluded columns are
+builds, so nothing else can reach step 2 through it. Those excluded columns are
 exactly the operator's own classification, the same answer key the evaluation below
-scores Jev against, so letting any of them into the context would leak the answer into
-the question.
+scores against, so letting any of them in would leak the answer into the rule.
 
 ## Why the evaluation is honest
 
@@ -237,16 +264,13 @@ by the wind farm operator independently of this project. Jev never sees it: only
 `status` and `message` go into the questions.
 
 The question wording in `questions/event.yaml` was frozen before the first run
-against real data, so there was no chance to adjust the wording after seeing how Jev
-did.
+against real data (one wording change made from the wording alone, before any run,
+after the Task 1 review: see "Previous version" below), so there was no chance to
+adjust the wording after seeing how Jev did.
 
-The wording was drafted with the operator's categories in view, and one phrase was
-placed to match them: a stop requested by the park controller counts as planned,
-because the operator books "Park master stop" as Requested Shutdown.
-
-The mapping from that IEC category to the `cause` bucket the questions actually ask
-about is ours, not the operator's, and is stated plainly in `evaluate.py` and in every
-`out/evaluation.json` this project writes:
+The mapping from the operator's IEC category to the `cause` bucket the questions
+actually derive is ours, not the operator's, and is stated plainly in `evaluate.py`
+and in every `out/evaluation.json` this project writes:
 
 | IEC category | cause |
 | --- | --- |
@@ -259,141 +283,65 @@ about is ours, not the operator's, and is stated plainly in `evaluate.py` and in
 | Full Performance | running |
 | Partial Performance | running |
 
-Accuracy is reported two ways: per event, which weighs frequent alarms more heavily,
-and per distinct message, which does not. A confusion matrix and the specific
-messages where Jev disagreed with the operator, with Jev's own probabilities for that
-call, are both in the output, alongside a count of how many distinct messages Jev
-itself flagged as uncertain.
+Accuracy is reported per event, which weighs frequent alarms more heavily, and per
+distinct message, which does not. A confusion matrix and the specific
+messages where the derived cause disagreed with the operator, with the ids (if any)
+that were themselves uncertain, are both in the output, alongside a count of how many
+distinct messages derived to `unclear`.
 
-Step 2 is scored against the same answer key, with the same mapping. The mapping from
-IEC category to `cause` above is ours, not the operator's; the category itself stays
-the operator's own label whether an event was escalated or not. `out/evaluation.json`
+Step 2 is scored against the same answer key, with the same mapping. `out/evaluation.json`
 reports cause accuracy twice, once for step 1 alone and once for step 1 with step 2's
-cause substituted in wherever an event was escalated, both against the same operator
-category, over the same events. Among escalated events that carry a category, it also
-counts how many changed cause at all, how many moved towards the operator's answer,
-how many moved away from it, and how many were still an uncertain monitor after the
-second question. `questions/event_with_context.yaml` was committed before the first
-run against real data and not changed after, the same rule step 1's wording follows.
+own cause substituted in wherever an event was looked at again, both against the same
+operator category, over the same events. It also counts how many events step 2
+decided were "kept producing", how many of those carry an IEC category at all, and
+how many of that subset agree with the operator (their category maps to `running`,
+the only cause "kept producing" ever assigns).
 
 ## Limits
 
 The IEC category and the `cause` bucket are not a clean one-to-one mapping. A
-"Forced outage" is not always a defect Jev could see coming from the message text
-alone, and "Technical Standby" and "Requested Shutdown" both land on the same
-`planned` bucket despite being different things operationally. Treat the mapping as a
-reasonable approximation, not a certified equivalence.
+"Forced outage" is not always a defect the message text alone names, and "Technical
+Standby" and "Requested Shutdown" both land on the same `planned` bucket despite being
+different things operationally. Treat the mapping as a reasonable approximation, not a
+certified equivalence.
 
 The operator's own data has a quirk worth knowing about: "Manual stop - remote" is
 recorded as a forced outage in the source data, even though it was requested, not a
 failure. That is the operator's labelling choice, not a bug in this project's mapping,
 and it is left as is rather than second-guessed.
 
+"Kept producing" and "stopped" both read `after_power`, the mean power in the hour
+after the event. A turbine that stopped and restarted within that hour, or one with
+no 10-minute data at all, gets neither rule and stays exactly as step 1 left it: the
+50 kW threshold is a plain reading of one number, not a model of what happened.
+
 ## Measured
 
-One run against `jev-1.13.0` over all of 2016 for the six turbines, with an empty
-cache. The question wording was committed before any run and not changed after it.
-The answers from this run are in `results/judgments-2016.json` and the usage in
-`results/summary-2016.json`, so the numbers below can be reproduced without calling
-Jev, with `--cache results/judgments-2016.json --no-context` (see "How to fetch and
-run" above; step 2 runs by default, so `--no-context` is what keeps this call-free).
-
-### Speed and cost
-
-- 14,019 events, 98 distinct kinds of non-informational event, so 98 Jev requests
-  (one per kind, all three questions in each). Informational events never go to Jev.
-- 29 seconds for the whole year, with the requests sent one after another. 57,867
-  input tokens, $0.0024 in total.
-
-### Cause, against the operator's own category
-
-959 non-informational events carry the operator's IEC 61400-26 category. Mapped to
-`cause` with the table above:
-
-- Jev agreed with the operator on 717 of 959 events (75 %), and on 48 of 61 distinct
-  messages (79 %). An earlier run with the same wording gave 709 of 959: answers
-  near a boundary move a little between runs.
-- `planned` 508 of 508 and `external` 48 of 48 agreed. The disagreements are all on
-  `fault` and `running`.
-- Where they disagree, it is often the question rather than the reading. "Maximum
-  grid frequency" is external by our wording and a forced outage in the operator's
-  books. "Manual stop - remote" reads as planned and is booked as a forced outage.
-  Warnings such as "Vane 2 defect" or "Error brake resistor CHP" describe a defect,
-  so Jev says fault, while the operator books them as full performance because the
-  turbine kept producing. `cause` mixes why something happened with whether the
-  turbine is running, and these rows show it.
-- Jev was genuinely split on a few: "WEC shut down" 0.48 planned and 0.38 fault,
-  "No speed development" 0.49 external and 0.42 fault. Its `cause` read was below
-  0.6 confidence on 12 of the 61 scored messages (23 of all 98 asked).
-
-### Triage
-
-- 69 events went to act now (the top ones: "Oscillation encoder tower", "Safety
-  chain open", "High rotor speed nacelle", "Tower oscillation X level 2", "Emergency
-  stop base box"), 1,341 to monitor, 12,609 to no action.
-- Most of the monitor pile is uncertainty, not faults: 1,200 of the 1,341. For
-  "Battery test" Jev put `safety_related` at 0.25, just above the 0.2 that counts
-  as no, which alone sends 258 routine tests to monitor. `needs_site_visit` sat
-  between 0.3 and 0.6 for 62 of the 98 messages: from three or four words of vendor
-  text, whether someone has to drive out is often not knowable, and Jev says so.
-- 124 informational events went to monitor for chattering alone.
-
-What this shows: a narrow question works when the text carries the answer (planned,
-external, safety chains, emergency stops). When it does not, the model hovers in the
-middle, and the code's thresholds turn that into "look at it". Tightening the
-thresholds or the wording would change these numbers; we did not, so they stay
-honest.
+<TBD by real run>
 
 ## Measured: step 2
 
-One run against `jev-1.13.0` over all of 2016 for the six turbines, with an empty
-step-2 cache, on top of the step-1 answers above (read from
-`results/judgments-2016.json`, so step 1 is exactly the run described in "Measured").
-`questions/event_with_context.yaml` was committed before the run and not changed after
-it. The step-2 answers are in `results/judgments-context-2016.json` and the run's
-summary in `results/summary-context-2016.json`, so the numbers below reproduce without
-calling Jev.
+<TBD by real run>
 
-### Speed and cost
+## Previous version
 
-- Step 1 left 1,200 events uncertain. Their status, message and context came to 1,167
-  distinct states, so step 2 made 1,167 Jev requests, one per state, 20 at a time.
-- Step 2 took 21 seconds, 866,473 input tokens and $0.036. That is about 740 tokens per
-  request, against about 590 for a step-1 request: the context adds only a few lines.
+An earlier version of this project asked three broader questions instead of these
+five (`cause`, a hidden four-way choice; `safety_related`; `needs_site_visit`, a
+forecast). Against the same 959 events with an IEC category, that version agreed with
+the operator on 717 of 959 (75%), and on 808 of 959 (84%) once Jev was re-asked a
+second time with a paragraph of SCADA context. That work is at commit `d082b30`.
 
-### Cause, with context, against the operator's own category
+We have already seen which messages scored wrong under those broader questions. The
+five questions above were written from TypeSafe's guidance and general turbine
+vocabulary; they name no message that scored wrong, apart from the procedures the
+earlier version already named (cable unwinding, oil flushing). They were frozen
+before any run against real data, with one wording change made after the Task 1
+review, from the question wording alone, before any run: abnormal readings such as
+"too high" or "at its limit" had no question claiming them, so `names_turbine_problem`
+was widened to cover them. They were not changed after that.
 
-- Over the same 959 events with an IEC category, `cause` agreed with the operator for
-  717 (75 %) with step 1 alone and 808 (84 %) with step 2 added.
-- 703 of the escalated events carry an IEC category. Step 2 changed the cause for 148
-  of them: 118 from wrong to right, 27 from right to wrong, 3 from one wrong cause to
-  another. 449 of the 703 were still uncertain after step 2.
-- The gain is narrow. 117 of the 118 corrections are the three "Overload generator fan"
-  warnings, which step 1 called `running` and the operator files as forced outages;
-  with the context in front of it Jev called them `fault`.
-- The biggest loss is "Cable autounwind", 18 of its 68 events. Step 1 called it `planned`, which
-  matches the operator; with the context, which shows the turbine stopped and produced
-  nothing for a while, Jev called it `fault`.
-- Some disagreements do not move at all. "Comm. failure FPM" (65 events) is `fault`
-  both times, while the operator files it as full performance: the turbine kept
-  producing, and a lost communication link is not something a power curve shows.
+## results/
 
-### Triage, before and after step 2
-
-- act_now went from 69 to 201, monitor from 1,341 to 955, no action from 12,609 to
-  12,863.
-- Of the 1,200 escalated events, 254 went to no action, 132 to act_now and 814 stayed
-  in monitor.
-- The 132 new act_now events are all "fault needing a site visit": "Brake accumulator
-  defect" (95), "Breakdown obstacle light" (16), "Brake pads worn" (7) and a handful of
-  others. 119 of the 132 have no IEC category in the operator's log, so this data
-  cannot say whether they deserved it. "Brake pads worn" plausibly does; 95 brake
-  accumulator warnings is a lot of site visits.
-
-What this shows: a second, narrower look with a few computed numbers is cheap (a few
-cents for a year of a wind farm) and it does change answers, mostly in the right
-direction on the events the operator labelled. It does not settle what the text and
-a power curve cannot show, and two thirds of the escalated events stayed uncertain.
-Those are the ones where a person, or a third step with other data such as the
-turbine's own fault codes or maintenance log, would have to decide. As with step 1,
-the question wording was not tuned against these results.
+`results/` holds the artifacts from the one real run this project's `## Measured`
+sections describe, placed there by hand so a reader can reproduce the numbers without
+spending anything on Jev. See `results/README.md`.

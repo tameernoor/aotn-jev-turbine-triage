@@ -11,13 +11,14 @@ out/judgments.json and reloaded works here unchanged.
 
 `results`, if given, is step 1 and step 2's combined output (escalate()'s return value,
 or plain triage() output when step 2 was skipped): the same events, in the same order,
-each carrying `step1_triage`/`step1_reasons`/`step2_judgments` (None when that event was
-never escalated). When given, `evaluate` also scores the "step 1 plus step 2" cause (the
-step-2 cause where an event was escalated, the step-1 cause otherwise), how escalation
-moved events with an IEC category towards or away from the operator's answer, and triage
-counts before versus after step 2. `results=None` (the default, and every pre-step-2
-caller) reports those same fields with nothing escalated: identical to the step-1-alone
-numbers, and empty triage counts.
+each carrying `step1_triage`/`step1_reasons`/`cause` (step1_triage is None when that
+event was never escalated). When given, `evaluate` also scores the "step 1 plus step 2"
+cause (the final `cause` on the result where an event was escalated, the step-1 cause
+otherwise), how many events step 2 decided by "kept producing" and how many of those
+with an IEC category agree with the operator, and triage counts before versus after
+step 2. `results=None` (the default, and every pre-step-2 caller) reports those same
+fields with nothing escalated: identical to the step-1-alone numbers, and empty triage
+counts.
 """
 
 from __future__ import annotations
@@ -25,9 +26,10 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from collections.abc import Sequence
 
+from .escalate import KEPT_PRODUCING
 from .judgments import Judgments
 from .models import Event
-from .triage import Cache, INFORMATIONAL, MONITOR, TriageResult, UNCLEAR, derive_cause
+from .triage import Cache, INFORMATIONAL, RUNNING, TriageResult, UNCLEAR, derive_cause
 
 # Forced outage is the operator's label for an unplanned turbine fault; Scheduled
 # Maintenance, Technical Standby and Requested Shutdown are all planned by the operator
@@ -64,14 +66,6 @@ def _derived_cause(cache: Cache, status: str, message: str) -> tuple[str, list[s
     return cause, list(j.uncertain)
 
 
-def _still_uncertain(result: TriageResult) -> bool:
-    """True if step 2's own result (result.triage/reasons; already the step-2
-    read for an escalated event) is still an uncertain monitor, the same
-    predicate escalate.py uses on step 1's result to decide whether to
-    escalate in the first place."""
-    return result.triage == MONITOR and any(reason.startswith("uncertain:") for reason in result.reasons)
-
-
 def evaluate(events: Sequence[Event], cache: Cache, results: Sequence[TriageResult] | None = None) -> dict:
     """Accuracy of the step-1 derived `cause` against the operator's IEC category,
     counted per event and per distinct (status, message), a confusion matrix (with
@@ -85,13 +79,11 @@ def evaluate(events: Sequence[Event], cache: Cache, results: Sequence[TriageResu
     cause_by_pair: dict[tuple[str, str], tuple[str, list[str]]] = {}
 
     with_context_pairs: list[tuple[str, str]] = []  # (expected, got), step1+step2 cause
-    escalated_evaluated = 0
-    escalated_cause_changed = 0
-    escalated_wrong_to_right = 0
-    escalated_right_to_wrong = 0
-    escalated_still_uncertain = 0
     triage_counts_before: Counter[str] = Counter()
     triage_counts_after: Counter[str] = Counter()
+    kept_producing_decided = 0
+    kept_producing_with_category = 0
+    kept_producing_agreed = 0
 
     result_seq: Sequence[TriageResult | None] = results if results is not None else [None] * len(events)
     for event, result in zip(events, result_seq):
@@ -99,6 +91,14 @@ def evaluate(events: Sequence[Event], cache: Cache, results: Sequence[TriageResu
             before = result.step1_triage if result.step1_triage is not None else result.triage
             triage_counts_before[before] += 1
             triage_counts_after[result.triage] += 1
+
+            if KEPT_PRODUCING in result.reasons:
+                kept_producing_decided += 1
+                kept_producing_expected = IEC_TO_CAUSE.get(event.iec_category) if event.iec_category else None
+                if kept_producing_expected is not None:
+                    kept_producing_with_category += 1
+                    if kept_producing_expected == RUNNING:
+                        kept_producing_agreed += 1
 
         if event.status == INFORMATIONAL:
             continue
@@ -115,23 +115,12 @@ def evaluate(events: Sequence[Event], cache: Cache, results: Sequence[TriageResu
         expected_by_pair[key].append(expected)
         cause_by_pair[key] = derived
 
+        # Escalated: step 1's own read is kept separately (step1_triage/step1_reasons),
+        # and result.cause already holds step 2's own final cause (unchanged from step
+        # 1's when step 2 decided neither "kept producing" nor "stopped"; see
+        # escalate._apply_step2_rules).
         escalated = result is not None and result.step1_triage is not None
-        step2_cause = None
-        if escalated and result.step2_judgments is not None:
-            step2_value = result.step2_judgments.get("cause")
-            step2_cause = step2_value["value"] if step2_value is not None else None
-        with_context_pairs.append((expected, step2_cause if step2_cause is not None else got))
-
-        if escalated:
-            escalated_evaluated += 1
-            if step2_cause is not None and step2_cause != got:
-                escalated_cause_changed += 1
-            if got != expected and step2_cause == expected:
-                escalated_wrong_to_right += 1
-            if got == expected and step2_cause is not None and step2_cause != expected:
-                escalated_right_to_wrong += 1
-            if _still_uncertain(result):
-                escalated_still_uncertain += 1
+        with_context_pairs.append((expected, result.cause if escalated else got))
 
     events_correct = sum(1 for expected, got in per_event if expected == got)
     events_total = len(per_event)
@@ -202,16 +191,14 @@ def evaluate(events: Sequence[Event], cache: Cache, results: Sequence[TriageResu
             "total": with_context_total,
             "accuracy": with_context_correct / with_context_total if with_context_total else None,
         },
-        # Among escalated events that also carry an IEC category (so both a step-1 and
-        # a step-2 cause can be scored against the operator): how many changed cause at
-        # all, how many moved towards or away from the operator's answer, and how many
-        # were still an uncertain monitor after step 2's own read.
-        "escalated_with_iec_category": {
-            "evaluated": escalated_evaluated,
-            "cause_changed": escalated_cause_changed,
-            "wrong_to_right": escalated_wrong_to_right,
-            "right_to_wrong": escalated_right_to_wrong,
-            "still_uncertain": escalated_still_uncertain,
+        # How many events step 2 decided were "kept producing" (over every event with
+        # a result, not only IEC-scored ones); of those, how many carry an IEC
+        # category at all, and how many of that subset agree with the operator (their
+        # category maps to `running`, the cause "kept producing" always assigns).
+        "step2_kept_producing": {
+            "decided": kept_producing_decided,
+            "with_iec_category": kept_producing_with_category,
+            "agreed": kept_producing_agreed,
         },
         # Triage counts over every event (not only IEC-scored ones): before is step 1's
         # own triage (step1_triage where escalated, else the unescalated triage); after
