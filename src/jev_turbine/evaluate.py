@@ -11,6 +11,16 @@ silently left out, not counted as wrong.
 `evaluate(events, cache)` works on the same `Cache` shape `triage()` fills: `cache[status]
 [message]` holds the raw judgments dict Jev returned for that pair, so a cache saved to
 out/judgments.json and reloaded works here unchanged.
+
+`results`, if given, is step 1 and step 2's combined output (escalate()'s return value,
+or plain triage() output when step 2 was skipped): the same events, in the same order,
+each carrying `step1_triage`/`step1_reasons`/`step2_judgments` (None when that event was
+never escalated). When given, `evaluate` also scores the "step 1 plus step 2" cause (the
+step-2 cause where an event was escalated, the step-1 cause otherwise), how escalation
+moved events with an IEC category towards or away from the operator's answer, and triage
+counts before versus after step 2. `results=None` (the default, and every pre-step-2
+caller) reports those same fields with nothing escalated: identical to the step-1-alone
+numbers, and empty triage counts.
 """
 
 from __future__ import annotations
@@ -20,7 +30,7 @@ from collections.abc import Sequence
 
 from .judgments import CHOICE_MIN_CONFIDENCE
 from .models import Event
-from .triage import Cache, INFORMATIONAL
+from .triage import Cache, INFORMATIONAL, MONITOR, TriageResult
 
 # Forced outage is the operator's label for an unplanned turbine fault; Scheduled
 # Maintenance, Technical Standby and Requested Shutdown are all planned by the operator
@@ -52,17 +62,40 @@ def _cause_judgment(cache: Cache, status: str, message: str) -> dict | None:
     return raw.get("cause")
 
 
-def evaluate(events: Sequence[Event], cache: Cache) -> dict:
+def _still_uncertain(result: TriageResult) -> bool:
+    """True if step 2's own result (result.triage/reasons; already the step-2
+    read for an escalated event) is still an uncertain monitor, the same
+    predicate escalate.py uses on step 1's result to decide whether to
+    escalate in the first place."""
+    return result.triage == MONITOR and any(reason.startswith("uncertain:") for reason in result.reasons)
+
+
+def evaluate(events: Sequence[Event], cache: Cache, results: Sequence[TriageResult] | None = None) -> dict:
     """Accuracy of Jev's `cause` against the operator's IEC category, counted per event
     and per distinct (status, message), a confusion matrix, the distinct messages where
     Jev disagreed (with Jev's probabilities), and how many distinct messages were
     uncertain (confidence < CHOICE_MIN_CONFIDENCE). See the module docstring for what is
-    included and what is silently skipped."""
+    included and what is silently skipped, and for what `results` adds."""
     per_event: list[tuple[str, str]] = []  # (expected, got), one per scored event
     expected_by_pair: dict[tuple[str, str], list[str]] = defaultdict(list)
     cause_by_pair: dict[tuple[str, str], dict] = {}
 
-    for event in events:
+    with_context_pairs: list[tuple[str, str]] = []  # (expected, got), step1+step2 cause
+    escalated_evaluated = 0
+    escalated_cause_changed = 0
+    escalated_wrong_to_right = 0
+    escalated_right_to_wrong = 0
+    escalated_still_uncertain = 0
+    triage_counts_before: Counter[str] = Counter()
+    triage_counts_after: Counter[str] = Counter()
+
+    result_seq: Sequence[TriageResult | None] = results if results is not None else [None] * len(events)
+    for event, result in zip(events, result_seq):
+        if result is not None:
+            before = result.step1_triage if result.step1_triage is not None else result.triage
+            triage_counts_before[before] += 1
+            triage_counts_after[result.triage] += 1
+
         if event.status == INFORMATIONAL:
             continue
         expected = IEC_TO_CAUSE.get(event.iec_category) if event.iec_category else None
@@ -78,8 +111,29 @@ def evaluate(events: Sequence[Event], cache: Cache) -> dict:
         expected_by_pair[key].append(expected)
         cause_by_pair[key] = cause
 
+        escalated = result is not None and result.step1_triage is not None
+        step2_cause = None
+        if escalated and result.step2_judgments is not None:
+            step2_value = result.step2_judgments.get("cause")
+            step2_cause = step2_value["value"] if step2_value is not None else None
+        with_context_pairs.append((expected, step2_cause if step2_cause is not None else got))
+
+        if escalated:
+            escalated_evaluated += 1
+            if step2_cause is not None and step2_cause != got:
+                escalated_cause_changed += 1
+            if got != expected and step2_cause == expected:
+                escalated_wrong_to_right += 1
+            if got == expected and step2_cause is not None and step2_cause != expected:
+                escalated_right_to_wrong += 1
+            if _still_uncertain(result):
+                escalated_still_uncertain += 1
+
     events_correct = sum(1 for expected, got in per_event if expected == got)
     events_total = len(per_event)
+
+    with_context_correct = sum(1 for expected, got in with_context_pairs if expected == got)
+    with_context_total = len(with_context_pairs)
 
     # One (expected, got) pair per distinct message. `expected` is the majority of that
     # message's own scored events (always unanimous in the real 2016 data; the mode just
@@ -134,6 +188,30 @@ def evaluate(events: Sequence[Event], cache: Cache) -> dict:
             "total": messages_total,
             "accuracy": messages_correct / messages_total if messages_total else None,
         },
+        # Step 1 plus step 2: the step-2 cause where an event was escalated, the step-1
+        # cause otherwise. Same events as accuracy_by_event, so same total when nothing
+        # was escalated (results=None, or an empty run of step 2).
+        "accuracy_by_event_with_context": {
+            "correct": with_context_correct,
+            "total": with_context_total,
+            "accuracy": with_context_correct / with_context_total if with_context_total else None,
+        },
+        # Among escalated events that also carry an IEC category (so both a step-1 and
+        # a step-2 cause can be scored against the operator): how many changed cause at
+        # all, how many moved towards or away from the operator's answer, and how many
+        # were still an uncertain monitor after step 2's own read.
+        "escalated_with_iec_category": {
+            "evaluated": escalated_evaluated,
+            "cause_changed": escalated_cause_changed,
+            "wrong_to_right": escalated_wrong_to_right,
+            "right_to_wrong": escalated_right_to_wrong,
+            "still_uncertain": escalated_still_uncertain,
+        },
+        # Triage counts over every event (not only IEC-scored ones): before is step 1's
+        # own triage (step1_triage where escalated, else the unescalated triage); after
+        # is the final triage. Empty when `results` was not given.
+        "triage_counts_before_context": dict(triage_counts_before),
+        "triage_counts_after_context": dict(triage_counts_after),
         "confusion_matrix": {expected: dict(got_counts) for expected, got_counts in confusion.items()},
         "disagreements": disagreements,
         # ...evaluated: distinct messages IEC-scored above with a low-confidence cause read.

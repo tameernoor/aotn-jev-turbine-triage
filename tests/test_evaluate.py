@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from jev_turbine.evaluate import IEC_TO_CAUSE, evaluate
 from jev_turbine.models import Event
+from jev_turbine.triage import ACT_NOW, MONITOR, NO_ACTION, TriageResult
 
 T0 = datetime(2016, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -17,6 +18,40 @@ def ev(turbine="Kelmarsh 1", status="Stop", message="msg", iec_category=None):
         message=message,
         iec_category=iec_category,
     )
+
+
+def result_for(
+    event,
+    triage=NO_ACTION,
+    reasons=None,
+    step1_triage=None,
+    step1_reasons=None,
+    context=None,
+    step2_judgments=None,
+):
+    """A TriageResult for `event`, step-1-only unless step1_triage is given
+    (matching how escalate() marks an escalated event: step1_triage/reasons
+    hold step 1's own read, triage/reasons hold the final one)."""
+    return TriageResult(
+        turbine=event.turbine,
+        start=event.start,
+        end=event.end,
+        duration_seconds=event.duration_seconds,
+        status=event.status,
+        message=event.message,
+        triage=triage,
+        reasons=reasons or [],
+        chattering=False,
+        flood=False,
+        step1_triage=step1_triage,
+        step1_reasons=step1_reasons,
+        context=context,
+        step2_judgments=step2_judgments,
+    )
+
+
+def step2_cause(value):
+    return {"cause": {"type": "choice", "value": value, "probabilities": {value: 1.0}, "confidence": 1.0}}
 
 
 def cause_judgment(value, probabilities=None, confidence=1.0):
@@ -207,3 +242,174 @@ def test_uncertain_messages_asked_covers_every_pair_in_the_cache_not_only_scored
 
     assert result["uncertain_messages_evaluated"] == 1  # only "Gearbox fault" is IEC-scored and uncertain
     assert result["uncertain_messages_asked"] == 2  # "Gearbox fault" and "Unlogged noise" both
+
+
+# --- step 2: with-context accuracy, escalation deltas, before/after triage counts ---
+
+
+def test_results_none_reports_the_same_numbers_as_step1_alone():
+    events = [ev(status="Stop", message="Gearbox fault", iec_category="Forced outage")]
+    cache = cache_with(("Stop", "Gearbox fault", cause_judgment("fault")))
+
+    result = evaluate(events, cache)
+
+    assert result["accuracy_by_event_with_context"] == result["accuracy_by_event"]
+    assert result["escalated_with_iec_category"] == {
+        "evaluated": 0,
+        "cause_changed": 0,
+        "wrong_to_right": 0,
+        "right_to_wrong": 0,
+        "still_uncertain": 0,
+    }
+    assert result["triage_counts_before_context"] == {}
+    assert result["triage_counts_after_context"] == {}
+
+
+def test_non_escalated_event_with_results_uses_step1_cause_for_with_context_too():
+    event = ev(status="Stop", message="Gearbox fault", iec_category="Forced outage")
+    cache = cache_with(("Stop", "Gearbox fault", cause_judgment("fault")))
+    results = [result_for(event, triage=NO_ACTION, reasons=["fault"])]  # never escalated
+
+    result = evaluate([event], cache, results)
+
+    assert result["accuracy_by_event_with_context"] == {"correct": 1, "total": 1, "accuracy": 1.0}
+    assert result["escalated_with_iec_category"]["evaluated"] == 0
+
+
+def test_escalated_event_wrong_to_right():
+    event = ev(status="Stop", message="Manual stop", iec_category="Forced outage")  # expected: fault
+    cache = cache_with(("Stop", "Manual stop", cause_judgment("planned")))  # step 1 was wrong
+    results = [
+        result_for(
+            event,
+            triage=MONITOR,
+            reasons=["fault, remote reset may clear it"],
+            step1_triage=MONITOR,
+            step1_reasons=["uncertain: cause"],
+            step2_judgments=step2_cause("fault"),  # step 2 is right
+        )
+    ]
+
+    result = evaluate([event], cache, results)
+
+    assert result["accuracy_by_event"] == {"correct": 0, "total": 1, "accuracy": 0.0}
+    assert result["accuracy_by_event_with_context"] == {"correct": 1, "total": 1, "accuracy": 1.0}
+    assert result["escalated_with_iec_category"] == {
+        "evaluated": 1,
+        "cause_changed": 1,
+        "wrong_to_right": 1,
+        "right_to_wrong": 0,
+        "still_uncertain": 0,
+    }
+
+
+def test_escalated_event_right_to_wrong():
+    event = ev(status="Stop", message="Gearbox fault", iec_category="Forced outage")  # expected: fault
+    cache = cache_with(("Stop", "Gearbox fault", cause_judgment("fault")))  # step 1 was right
+    results = [
+        result_for(
+            event,
+            triage=NO_ACTION,
+            reasons=["planned"],
+            step1_triage=MONITOR,
+            step1_reasons=["uncertain: cause"],
+            step2_judgments=step2_cause("planned"),  # step 2 is wrong
+        )
+    ]
+
+    result = evaluate([event], cache, results)
+
+    assert result["accuracy_by_event"] == {"correct": 1, "total": 1, "accuracy": 1.0}
+    assert result["accuracy_by_event_with_context"] == {"correct": 0, "total": 1, "accuracy": 0.0}
+    assert result["escalated_with_iec_category"] == {
+        "evaluated": 1,
+        "cause_changed": 1,
+        "wrong_to_right": 0,
+        "right_to_wrong": 1,
+        "still_uncertain": 0,
+    }
+
+
+def test_escalated_event_unchanged_cause_is_not_counted_as_changed():
+    event = ev(status="Stop", message="Gearbox fault", iec_category="Forced outage")
+    cache = cache_with(("Stop", "Gearbox fault", cause_judgment("fault")))
+    results = [
+        result_for(
+            event,
+            triage=ACT_NOW,
+            reasons=["fault needing a site visit"],
+            step1_triage=MONITOR,
+            step1_reasons=["uncertain: needs_site_visit"],
+            step2_judgments=step2_cause("fault"),  # same cause both times
+        )
+    ]
+
+    result = evaluate([event], cache, results)
+
+    assert result["escalated_with_iec_category"]["evaluated"] == 1
+    assert result["escalated_with_iec_category"]["cause_changed"] == 0
+    assert result["escalated_with_iec_category"]["wrong_to_right"] == 0
+    assert result["escalated_with_iec_category"]["right_to_wrong"] == 0
+
+
+def test_escalated_event_still_uncertain_after_step2():
+    event = ev(status="Stop", message="Gearbox fault", iec_category="Forced outage")
+    cache = cache_with(("Stop", "Gearbox fault", cause_judgment("fault")))
+    results = [
+        result_for(
+            event,
+            triage=MONITOR,
+            reasons=["uncertain: needs_site_visit"],  # step 2's own uncertain reason
+            step1_triage=MONITOR,
+            step1_reasons=["uncertain: cause"],
+            step2_judgments=step2_cause("fault"),
+        )
+    ]
+
+    result = evaluate([event], cache, results)
+
+    assert result["escalated_with_iec_category"]["still_uncertain"] == 1
+
+
+def test_triage_counts_before_and_after_context_over_every_event_not_only_iec_scored():
+    escalated = ev(status="Stop", message="Gearbox fault", iec_category="Forced outage")
+    not_escalated = ev(status="Stop", message="Cable unwind", iec_category=None)
+    cache = cache_with(("Stop", "Gearbox fault", cause_judgment("fault")))
+    results = [
+        result_for(
+            escalated,
+            triage=ACT_NOW,
+            reasons=["fault needing a site visit"],
+            step1_triage=MONITOR,
+            step1_reasons=["uncertain: needs_site_visit"],
+            step2_judgments=step2_cause("fault"),
+        ),
+        result_for(not_escalated, triage=NO_ACTION, reasons=["planned"]),  # never touched by step 2
+    ]
+
+    result = evaluate([escalated, not_escalated], cache, results)
+
+    assert result["triage_counts_before_context"] == {MONITOR: 1, NO_ACTION: 1}
+    assert result["triage_counts_after_context"] == {ACT_NOW: 1, NO_ACTION: 1}
+
+
+def test_escalated_event_without_iec_category_is_excluded_from_escalation_counts():
+    event = ev(status="Stop", message="No category", iec_category=None)
+    cache = cache_with(("Stop", "No category", cause_judgment("planned")))
+    results = [
+        result_for(
+            event,
+            triage=NO_ACTION,
+            reasons=["external"],
+            step1_triage=MONITOR,
+            step1_reasons=["uncertain: cause"],
+            step2_judgments=step2_cause("external"),
+        )
+    ]
+
+    result = evaluate([event], cache, results)
+
+    assert result["escalated_with_iec_category"]["evaluated"] == 0
+    # still counted in the before/after triage totals even without an IEC category
+    assert result["triage_counts_before_context"] == {MONITOR: 1}
+    assert result["triage_counts_after_context"] == {NO_ACTION: 1}

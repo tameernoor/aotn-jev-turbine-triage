@@ -111,8 +111,10 @@ async def escalate(
     event is returned unchanged. `cache`, if given (even {}), is filled in
     place with every step-2 judgment actually asked, keyed by the exact state
     sent to Jev (see EscalationCache), so a later call does not ask Jev again
-    for the same status/message/context. `limit` bounds how many Jev requests
-    are in flight at once.
+    for the same status/message/context. Two escalated events that render the
+    same state within a single call are also only asked once each, not once
+    per event (see the dedupe below `contexts` above). `limit` bounds how many
+    Jev requests are in flight at once.
     """
     if cache is None:
         cache = {}
@@ -126,11 +128,25 @@ async def escalate(
     escalated_events = [event for _, event in to_escalate]
     contexts = build_contexts(escalated_events, con, all_events)
     states = [_state(event, context) for event, context in zip(escalated_events, contexts)]
+    keys = [_cache_key(state) for state in states]
+
+    # Dedupe by state before asking: two escalated events can render the exact same
+    # (status, message, context). Real 2016 data has 1,200 uncertain events but only
+    # 1,167 distinct states. Gathering over every state (one coroutine per event)
+    # would race two lookups of the same not-yet-cached key and ask Jev twice;
+    # gathering over unique keys only asks once per distinct state, then the answer
+    # is mapped back to every event that shares it.
+    unique_states: dict[str, dict] = {}
+    for key, state in zip(keys, states):
+        unique_states.setdefault(key, state)
 
     semaphore = asyncio.Semaphore(limit)
-    raw_judgments_list = await asyncio.gather(
-        *(_ask_one(state, ask, questions, cache, semaphore) for state in states)
+    unique_keys = list(unique_states)
+    unique_raw = await asyncio.gather(
+        *(_ask_one(unique_states[key], ask, questions, cache, semaphore) for key in unique_keys)
     )
+    raw_by_key = dict(zip(unique_keys, unique_raw))
+    raw_judgments_list = [raw_by_key[key] for key in keys]
 
     for (i, event), context, raw in zip(to_escalate, contexts, raw_judgments_list):
         step1_result = results[i]

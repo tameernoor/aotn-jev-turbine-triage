@@ -51,7 +51,8 @@ cp .env.example .env
 ```
 
 Fetch the real 2016 data into `data/raw/` (downloads from Zenodo, or copies from a
-local mirror if `--from DIR` or `KELMARSH_LOCAL_DIR` points at one):
+local mirror if `--from DIR` or `KELMARSH_LOCAL_DIR` points at one). This also builds
+`data/raw/kelmarsh.duckdb`, the 10-minute measurements step 2 reads its context from:
 
 ```
 uv run python scripts/fetch_kelmarsh.py
@@ -64,40 +65,62 @@ Run the full pipeline against it. This needs `TYPESAFE_API_KEY` in the environme
 uv run --env-file .env python -m jev_turbine run
 ```
 
-Run against the committed sample instead, without fetching anything:
+Run against the committed sample instead, without fetching anything (this also uses
+the sample's own small `data/sample/Turbine_Data_*.csv` slices for step 2, in place
+of `data/raw/kelmarsh.duckdb`):
 
 ```
 uv run --env-file .env python -m jev_turbine run --sample
 ```
 
+`run` does step 1, then step 2 (see "Step 2: context" below), by default. `--no-context`
+skips step 2 entirely, building no context and opening no DuckDB at all, not even to
+check that `data/raw/kelmarsh.duckdb` exists.
+
+```
+uv run --env-file .env python -m jev_turbine run --no-context
+```
+
 `--data DIR` points at a different folder of Status CSVs, and `--out DIR` changes
 where output is written (default `out/`). Each run writes:
 
-- `out/judgments.json`: Jev's answers, cached and keyed by status and then message, so
-  it is one entry per distinct `(status, message)` pair. A pair already in this file
-  is never asked again, so a second run against the same data only pays for whatever
-  is new. The file also carries a hash of `questions/event.yaml`; if that hash does
-  not match the questions this run is using, the cache is not trusted, is ignored
-  instead of silently serving stale answers, and the run says so, on stdout and in
-  `out/summary.json`.
+- `out/judgments.json`: step 1's answers, cached and keyed by status and then message,
+  so it is one entry per distinct `(status, message)` pair. A pair already in this
+  file is never asked again, so a second run against the same data only pays for
+  whatever is new. The file also carries a hash of `questions/event.yaml`; if that
+  hash does not match the questions this run is using, the cache is not trusted, is
+  ignored instead of silently serving stale answers, and the run says so, on stdout
+  and in `out/summary.json`.
+- `out/judgments-context.json`: step 2's answers, the same idea but keyed by the exact
+  `status`/`message`/`context` state sent to Jev, since the context is specific to one
+  event rather than shared across a whole distinct pair. Carries a hash of
+  `questions/event_with_context.yaml`, checked and reported the same way. Not written
+  at all when `--no-context` is given.
 - `out/triage.jsonl`: one JSON line per event, in event order, with the turbine,
-  start and end timestamps, duration, status, message, the triage class, the reasons
-  behind it, and whether it was flagged as chattering or part of a flood.
-- `out/evaluation.json`: the accuracy report described below.
+  start and end timestamps, duration, status, message, the final triage class and the
+  reasons behind it, and whether it was flagged as chattering or part of a flood, plus
+  `step1_triage`, `step1_reasons`, `context` and `step2_judgments`, all `null` for an
+  event that step 1 was not uncertain about and so was never escalated.
+- `out/evaluation.json`: the accuracy report described below, now also comparing step
+  1 alone against step 1 plus step 2.
 - `out/summary.json`: the same summary printed at the end, as JSON: triage counts,
-  the top act_now messages, evaluation accuracy, and how many Jev calls the run made,
-  at what token count, cost and wall time, plus the model ids seen in those calls.
+  the top act_now messages, evaluation accuracy, and how many Jev calls step 1 made,
+  at what token count, cost and wall time, plus the model ids seen, and the same five
+  numbers again for step 2, kept separate.
 
-Jev itself is only ever built the first time a pair is actually asked, so a run whose
-cache already covers every pair needs no `TYPESAFE_API_KEY` and makes no call at all.
-To reproduce `## Measured` below without calling Jev, copy
-`results/judgments-2016.json` to `out/judgments.json` and run, or point `--cache FILE`
-at it directly (`--cache` seeds the run from that file instead of `out/judgments.json`
-without ever writing back to it; the merged result still lands in
-`out/judgments.json` as usual):
+Jev itself is only ever built the first time a question is actually asked, in either
+step, so a run whose caches already cover everything needs no `TYPESAFE_API_KEY` and
+makes no call at all. One client is shared between step 1 and step 2 and closed once,
+after both are done. To reproduce `## Measured` below without calling Jev, point
+`--cache FILE` and `--context-cache FILE` at the committed answers (each seeds the run
+from that file instead of the matching `out/` file, without ever writing back to it;
+the merged result still lands in `out/judgments.json` / `out/judgments-context.json`
+as usual):
 
 ```
-uv run --env-file .env python -m jev_turbine run --cache results/judgments-2016.json
+uv run --env-file .env python -m jev_turbine run \
+  --cache results/judgments-2016.json \
+  --context-cache results/judgments-context-2016.json
 ```
 
 ## Questions
@@ -138,6 +161,56 @@ starting within ten minutes anywhere on the farm is flagged as a flood; and a st
 lasting more than 24 hours is a long stop, which floors the event at monitor and adds
 its own reason.
 
+## Step 2: context
+
+Step 1 leaves some events at monitor because an answer was genuinely uncertain, not
+because of a code check like chattering or a long stop. For exactly those events,
+step 2 asks Jev the same three questions again, now with a paragraph of plain-English
+context added, computed by code from the turbine's own 10-minute measurements and its
+event history, rather than left for Jev to guess at from three or four words of alarm
+text.
+
+The numbers in that paragraph, mean power and wind before the event, mean power and
+rotor speed after it, how long power stayed below 50 kW, grid frequency and voltage
+around the event, and a few counts from the event log, come from one SQL query,
+`src/jev_turbine/sql/context.sql`, run once over the whole batch of events being
+escalated rather than once per event. A reader can check the arithmetic directly
+there instead of trusting a description of it. Everything is rounded before it
+reaches Jev, power to 10 kW, wind to 0.1 m/s, frequency to 0.01 Hz, voltage to 1 V,
+durations to the nearest 10 minutes. Missing data is said, not guessed, for example
+"No 10-minute data around this event."
+
+A real example, Kelmarsh 1, a Stop with the message "Frequency converter error",
+2016-01-24 16:51:17:
+
+```
+Before the event: power 600 kW, wind 7.7 m/s (60-minute averages).
+After the event: power 0 kW; power stayed below 50 kW for at least 17 h 30 min, then no power data.
+Grid in the hour around the event: frequency 49.93 to 50.02 Hz, voltage 690 to 697 V.
+Same message on this turbine in the previous 7 days: 0 times.
+Other turbines stopped in the same 10 minutes: no.
+```
+
+`questions/event_with_context.yaml` asks the same three questions as step 1, word for
+word, with `status`, `message` and now this `context` text as the basis for each
+answer. A confident, different read from step 2 replaces step 1's triage for that
+event; step 1's own triage and reasons are kept alongside it (`step1_triage`,
+`step1_reasons` in `out/triage.jsonl`) rather than discarded. If step 2 is itself
+uncertain, the event stays at monitor with step 2's own uncertain reason instead of
+step 1's.
+
+Only five 10-minute columns ever reach the context builder, `Power (kW)`, `Wind speed
+(m/s)`, `Rotor speed (RPM)`, `Grid frequency (Hz)` and `Grid voltage (V)`, physical
+measurements a turbine's own sensors record regardless of who is judging the event.
+Every other column in the source data, anything about lost production, availability,
+curtailment, contractual energy budgets or capacity, and the event log's own `Service
+contract category`, `IEC category` and `Code` fields, is excluded structurally. The
+loader (`measurements.py`) only has room for the five allowed columns in the table it
+builds, so nothing else can reach a Jev prompt through it. Those excluded columns are
+exactly the operator's own classification, the same answer key the evaluation below
+scores Jev against, so letting any of them into the context would leak the answer into
+the question.
+
 ## Why the evaluation is honest
 
 The answer key is not ours. It is the operator's own IEC 61400-26 category, recorded
@@ -172,6 +245,17 @@ and per distinct message, which does not. A confusion matrix and the specific
 messages where Jev disagreed with the operator, with Jev's own probabilities for that
 call, are both in the output, alongside a count of how many distinct messages Jev
 itself flagged as uncertain.
+
+Step 2 is scored against the same answer key, with the same mapping. The mapping from
+IEC category to `cause` above is ours, not the operator's; the category itself stays
+the operator's own label whether an event was escalated or not. `out/evaluation.json`
+reports cause accuracy twice, once for step 1 alone and once for step 1 with step 2's
+cause substituted in wherever an event was escalated, both against the same operator
+category, over the same events. Among escalated events that carry a category, it also
+counts how many changed cause at all, how many moved towards the operator's answer,
+how many moved away from it, and how many were still an uncertain monitor after the
+second question. `questions/event_with_context.yaml` was committed before the first
+run against real data and not changed after, the same rule step 1's wording follows.
 
 ## Limits
 
@@ -239,3 +323,39 @@ external, safety chains, emergency stops). When it does not, the model hovers in
 middle, and the code's thresholds turn that into "look at it". Tightening the
 thresholds or the wording would change these numbers; we did not, so they stay
 honest.
+
+## Measured: step 2
+
+<TBD by real run: one run against `jev-<version>` over all of 2016 for the six
+turbines, with an empty step-2 cache, chained onto the step-1 run above.
+`questions/event_with_context.yaml` was committed before any step-2 run and not
+changed after it. The answers are in `results/judgments-context-2016.json`, so the
+numbers below can be reproduced without calling Jev; see "How to fetch and run" for
+`--cache` plus `--context-cache` together.>
+
+### Speed and cost
+
+- <TBD by real run: how many events step 1 left uncertain, and how many distinct
+  status/message/context states that came out to after the dedupe described in "Step
+  2: context".>
+- <TBD by real run: wall time, input tokens and cost for step 2 alone, kept separate
+  from step 1's own numbers above.>
+
+### Cause, with context, against the operator's own category
+
+- <TBD by real run: `accuracy_by_event` versus `accuracy_by_event_with_context`, both
+  against the same 959-event answer key.>
+- <TBD by real run: among escalated events that carry an IEC category,
+  `escalated_with_iec_category`'s `cause_changed`, `wrong_to_right`, `right_to_wrong`
+  and `still_uncertain` counts, with a couple of named examples of which direction
+  the second question moved things.>
+
+### Triage, before and after step 2
+
+- <TBD by real run: `triage_counts_before_context` versus `triage_counts_after_context`,
+  and how much of the step-1 monitor pile step 2 actually resolved to act_now or
+  no_action versus how much stayed monitor on its own uncertain reason.>
+
+<TBD by real run: what this shows, in the same plain, unhyped register as "What this
+shows" above, including whether the extra context earned its cost or mostly confirmed
+step 1.>

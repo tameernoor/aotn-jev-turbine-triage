@@ -360,6 +360,61 @@ def test_hash_mismatch_invalidates_the_cache(tmp_path):
 # --- concurrency never exceeds the limit ---------------------------------------------
 
 
+# --- dedupe: identical states are asked once, even under real interleaving ----------
+
+
+class YieldingAsk:
+    """Wraps a FakeJev's ask, awaiting asyncio.sleep(0) before delegating, so two
+    coroutines asking for the same state genuinely interleave. The plain
+    synchronous FakeJev never yields control between the cache check and the
+    cache write, which would hide a missing dedupe (both coroutines would run
+    to completion before either got a chance to race the other)."""
+
+    def __init__(self, fake: FakeJev):
+        self._fake = fake
+
+    async def __call__(self, state, questions):
+        await asyncio.sleep(0)
+        return await self._fake.ask(state, questions)
+
+
+def test_identical_states_are_asked_once_under_concurrent_interleaving():
+    # Same turbine, same start, same status/message, no measurements loaded: both
+    # events render to the exact same (status, message, context) state. Without
+    # dedupe, both coroutines would race cache.get(key) -> None -> ask() twice.
+    event_a = ev(status="Stop", message="Pitch fault", start=T0)
+    event_b = ev(status="Stop", message="Pitch fault", start=T0)
+    events = [event_a, event_b]
+    cache = {"Stop": {"Pitch fault": UNCERTAIN_CAUSE}}
+    results = step1(events, cache)
+    assert results[0].triage == MONITOR and results[1].triage == MONITOR
+
+    con = connect_in_memory()
+    fake = FakeJev(values=dict(cause="external", safety_related=0.1))
+    final = asyncio.run(escalate(results, events, events, con, YieldingAsk(fake), cache={}))
+
+    assert len(fake.calls) == 1  # one distinct state, asked exactly once
+    assert final[0].triage == NO_ACTION
+    assert final[1].triage == NO_ACTION
+    assert final[0].context == final[1].context
+
+
+def test_distinct_states_sharing_turbine_and_start_are_still_both_asked_under_interleaving():
+    event_a = ev(status="Stop", message="Pitch fault", start=T0)
+    event_b = ev(status="Stop", message="Yaw fault", start=T0)
+    events = [event_a, event_b]
+    cache = {"Stop": {"Pitch fault": UNCERTAIN_CAUSE, "Yaw fault": UNCERTAIN_CAUSE}}
+    results = step1(events, cache)
+
+    con = connect_in_memory()
+    fake = FakeJev(values=dict(cause="external", safety_related=0.1))
+    final = asyncio.run(escalate(results, events, events, con, YieldingAsk(fake), cache={}))
+
+    assert len(fake.calls) == 2
+    assert final[0].triage == NO_ACTION
+    assert final[1].triage == NO_ACTION
+
+
 def test_concurrency_never_exceeds_the_limit():
     n = 6
     events = [

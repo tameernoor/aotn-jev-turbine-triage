@@ -2,13 +2,54 @@ import hashlib
 import json
 from pathlib import Path
 
+import pytest
 from fakes import FakeJev
 
+from jev_turbine import escalate
 from jev_turbine.__main__ import DEFAULT_DATA_DIR, SAMPLE_DATA_DIR, _resolve_data_dir, main
 from jev_turbine.loader import load_events
 from jev_turbine.triage import QUESTIONS_PATH
 
 SAMPLE_DIR = Path(__file__).resolve().parent.parent / "data" / "sample"
+
+
+class RaisingAfterNAsk:
+    """Like TwoPhaseFakeJev, but the step-2 phase raises from the (raise_after+1)th
+    attempt onward. Execution order for escalate()'s asyncio.gather over distinct
+    states is deterministic here (no real awaits inside step2.ask, so each task runs
+    to completion before the next starts), so `raise_after=1` reliably means: one
+    state is answered and cached, then the next raises."""
+
+    def __init__(self, step1_values: dict, step2_values: dict, raise_after: int):
+        self.step1 = FakeJev(values=step1_values)
+        self.step2 = FakeJev(values=step2_values)
+        self._raise_after = raise_after
+        self.step2_attempts = 0
+
+    async def __call__(self, state, questions):
+        if "context" in state:
+            self.step2_attempts += 1
+            if self.step2_attempts > self._raise_after:
+                raise RuntimeError("simulated step-2 failure")
+            return await self.step2.ask(state, questions)
+        return await self.step1.ask(state, questions)
+
+
+class TwoPhaseFakeJev:
+    """A stand-in for Jev whose answers depend on whether the state carries a
+    `context` key. Step 1 (no context) is deliberately left uncertain, via a
+    borderline safety_related noul, so every non-informational sample event
+    escalates; step 2 (context present) answers confidently and differently,
+    so escalation visibly changes the outcome. Kept as two separate FakeJevs
+    so each phase's own call count and states are inspectable."""
+
+    def __init__(self):
+        self.step1 = FakeJev(values=dict(cause="fault", safety_related=0.5, needs_site_visit=0.1))
+        self.step2 = FakeJev(values=dict(cause="planned", safety_related=0.1))
+
+    async def ask(self, state, questions):
+        fake = self.step2 if "context" in state else self.step1
+        return await fake.ask(state, questions)
 
 
 # --- data dir resolution, unit-tested directly so it never depends on data/raw existing ---
@@ -58,6 +99,10 @@ def test_run_end_to_end_on_sample_writes_all_three_outputs(tmp_path, capsys):
         "reasons",
         "chattering",
         "flood",
+        "step1_triage",
+        "step1_reasons",
+        "context",
+        "step2_judgments",
     }
     assert "+00:00" in row["start"] or row["start"].endswith("Z")
 
@@ -116,7 +161,10 @@ def test_run_on_a_custom_data_dir(tmp_path):
     out_dir = tmp_path / "out"
     fake = FakeJev(values=dict(cause="planned", safety_related=0.1))
 
-    main(["run", "--data", str(data_dir), "--out", str(out_dir)], ask=fake.ask)
+    # --no-context: this custom dir has no Turbine_Data CSVs, and a --data dir is
+    # independent of --sample, so step 2 would otherwise try to open the persisted
+    # data/raw/kelmarsh.duckdb, which a test must not depend on existing.
+    main(["run", "--data", str(data_dir), "--out", str(out_dir), "--no-context"], ask=fake.ask)
 
     assert (out_dir / "triage.jsonl").exists()
 
@@ -142,10 +190,20 @@ def test_summary_json_holds_the_printed_fields_plus_the_model_ids_seen(tmp_path)
         "wall_seconds",
         "model_ids",
         "cache_ignored",
+        "step2_jev_calls",
+        "step2_input_tokens",
+        "step2_cost_usd",
+        "step2_wall_seconds",
+        "step2_model_ids",
+        "step2_cache_ignored",
     }
     assert summary["jev_calls"] == len(fake.calls)
     assert summary["model_ids"] == ["fake-jev"]
     assert summary["cache_ignored"] is False
+    # This fixture's fixed answers (cause=planned, confident) never leave step 1
+    # uncertain, so nothing is escalated: step 2 made no calls at all.
+    assert summary["step2_jev_calls"] == 0
+    assert summary["step2_cache_ignored"] is False
 
 
 # --- Jev() is built lazily, only on an actual cache miss ---
@@ -202,3 +260,113 @@ def test_cache_flag_seeds_from_a_file_without_writing_back_to_it(tmp_path):
     assert len(second.calls) == 0  # every pair was already in the seed file
     assert (out_dir / "judgments.json").exists()
     assert seed_path.read_text(encoding="utf-8") == seed_before  # the seed file itself is untouched
+
+
+# --- step 2 (context), end to end on --sample ---------------------------------------
+
+
+def test_run_end_to_end_with_step2_on_sample(tmp_path):
+    out_dir = tmp_path / "out"
+    fake = TwoPhaseFakeJev()
+
+    main(["run", "--sample", "--out", str(out_dir)], ask=fake.ask)
+
+    assert len(fake.step1.calls) > 0
+    assert len(fake.step2.calls) > 0  # step 1's uncertainty escalated at least one event
+
+    context_cache_path = out_dir / "judgments-context.json"
+    assert context_cache_path.exists()
+    payload = json.loads(context_cache_path.read_text(encoding="utf-8"))
+    assert payload["questions_hash"] == escalate.questions_hash()
+    assert payload["cache"]
+
+    rows = [json.loads(line) for line in (out_dir / "triage.jsonl").read_text(encoding="utf-8").splitlines()]
+    escalated_rows = [r for r in rows if r["step1_triage"] is not None]
+    assert escalated_rows  # contexts really were built from the sample's own 10-minute slices
+    for row in escalated_rows:
+        assert row["context"] is not None
+        assert row["context"] != ""
+        assert row["step1_reasons"] is not None
+        assert row["step2_judgments"] is not None
+
+    informational_rows = [r for r in rows if r["status"] == "Informational"]
+    assert informational_rows
+    for row in informational_rows:  # informational events are never escalated
+        assert row["context"] is None
+        assert row["step1_triage"] is None
+
+    evaluation = json.loads((out_dir / "evaluation.json").read_text(encoding="utf-8"))
+    assert "accuracy_by_event_with_context" in evaluation
+    assert evaluation["escalated_with_iec_category"]["evaluated"] >= 0
+    assert evaluation["triage_counts_before_context"]
+    assert evaluation["triage_counts_after_context"]
+
+    summary = json.loads((out_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["step2_jev_calls"] == len(fake.step2.calls)
+    assert summary["step2_jev_calls"] > 0
+    assert summary["step2_model_ids"] == ["fake-jev"]
+
+    # A second run against the same out_dir reuses both caches and asks nothing new.
+    second = TwoPhaseFakeJev()
+    main(["run", "--sample", "--out", str(out_dir)], ask=second.ask)
+    assert len(second.step1.calls) == 0
+    assert len(second.step2.calls) == 0
+
+
+# --- --no-context: no escalation, no DuckDB, context always null --------------------
+
+
+def test_no_context_flag_skips_step2_entirely(tmp_path):
+    out_dir = tmp_path / "out"
+    fake = TwoPhaseFakeJev()
+
+    main(["run", "--sample", "--out", str(out_dir), "--no-context"], ask=fake.ask)
+
+    assert len(fake.step1.calls) > 0
+    assert len(fake.step2.calls) == 0  # step 2 never runs at all
+    assert not (out_dir / "judgments-context.json").exists()
+
+    rows = [json.loads(line) for line in (out_dir / "triage.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert rows
+    for row in rows:
+        assert row["context"] is None
+        assert row["step1_triage"] is None
+        assert row["step1_reasons"] is None
+        assert row["step2_judgments"] is None
+
+    evaluation = json.loads((out_dir / "evaluation.json").read_text(encoding="utf-8"))
+    assert evaluation["accuracy_by_event_with_context"] == evaluation["accuracy_by_event"]
+
+    summary = json.loads((out_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["step2_jev_calls"] == 0
+    assert summary["step2_input_tokens"] == 0
+    assert summary["step2_cost_usd"] == 0
+    assert summary["step2_model_ids"] == []
+
+
+# --- step-2 cache is saved in a finally, so a mid-run failure loses nothing already answered ---
+
+
+def test_step2_cache_is_saved_even_when_one_ask_raises(tmp_path):
+    out_dir = tmp_path / "out"
+    ask = RaisingAfterNAsk(
+        step1_values=dict(cause="fault", safety_related=0.5, needs_site_visit=0.1),
+        step2_values=dict(cause="planned", safety_related=0.1),
+        raise_after=1,
+    )
+
+    with pytest.raises(RuntimeError):
+        main(["run", "--sample", "--out", str(out_dir)], ask=ask)
+
+    # Step 1's own cache is unaffected: it is saved before step 2 ever starts.
+    assert (out_dir / "judgments.json").exists()
+
+    context_cache_path = out_dir / "judgments-context.json"
+    assert context_cache_path.exists()
+    payload = json.loads(context_cache_path.read_text(encoding="utf-8"))
+    assert payload["questions_hash"] == escalate.questions_hash()
+    assert len(payload["cache"]) == 1  # the one answer received before the raise
+
+    # Step-2 failures otherwise stay fail-loud: no triage.jsonl/evaluation.json/
+    # summary.json from an incomplete run.
+    assert not (out_dir / "triage.jsonl").exists()
