@@ -26,12 +26,17 @@ Window rules:
   minutes either side of this event's start. This is a choice, not a rule from
   the source data: "the same 10 minutes" is read generously, both directions.
 - "Power stayed below 50 kW": walks forward from the event start over known
-  (non-NULL) power readings. If the first known reading is already at or above
-  50 kW, it did not drop (0). Otherwise: recovers within 24h -> exact seconds to
-  the first reading at or above 50 kW; readings stay known and low all the way to
-  24h -> "at least 24 h"; the data stops (a gap of more than 30 minutes between
-  known readings) before either -> "at least <X>, then no power data", X to the
-  end of the last known reading. Missing data is said, not guessed.
+  (non-NULL) power readings. The stretch from the event start to the first known
+  reading is never itself treated as a gap, however late that reading is: only a
+  gap of more than 30 minutes BETWEEN two known readings counts as the data
+  stopping. A reading that follows such a gap is never a recovery (or "did not
+  drop"), even if its own power is already >= 50 kW; the gap resolves the search
+  first. So: the first known reading is already >= 50 kW -> it did not drop (0);
+  a later reading is >= 50 kW with no gap before it -> exact seconds to that
+  reading; readings stay known and low, gap-free, all the way to 24h -> "at
+  least 24 h"; a gap happens first -> "at least <X>, then no power data", X to
+  the end of the last known reading before the gap. Missing data is said, not
+  guessed.
 
 Rotor speed has no rounding rule in the plan; rounds to the nearest whole RPM,
 matching the plan's own "0 RPM" example.

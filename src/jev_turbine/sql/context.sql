@@ -56,44 +56,48 @@ around_agg AS (
 
 -- Below-50kW duration: walk forward from the true event start (not the grid
 -- boundaries above), over every KNOWN (non-NULL power) reading up to 24 hours
--- out, looking for whichever comes first: a recovery to >= 50 kW, or the data
--- stopping (a gap of more than 30 minutes since the previous known reading, or
--- since the start for the very first one).
+-- out, looking for whichever comes first: the data stopping (a gap of more than
+-- 30 minutes since the previous known reading), or a recovery to >= 50 kW.
+-- gap_since_prev_seconds is 0 for each event's very first known reading
+-- (COALESCE(prev_ts, ts), not COALESCE(prev_ts, start)): the stretch from the
+-- event start to that first reading is not itself a gap, however late it is,
+-- so that reading is never mistaken for "the data stopping" at 0 minutes in.
 after_known AS (
-    SELECT e.idx, e.start, m.ts, m.power_kw,
-           LAG(m.ts) OVER (PARTITION BY e.idx ORDER BY m.ts) AS prev_ts
-    FROM _context_events e
-    JOIN measurements m
-      ON m.turbine = e.turbine
-     AND m.ts >= e.start
-     AND m.ts <= e.start + INTERVAL 24 HOUR
-     AND m.power_kw IS NOT NULL
-),
-after_known_gap AS (
     SELECT idx, start, ts, power_kw, prev_ts,
-           date_diff('second', COALESCE(prev_ts, start), ts) AS gap_since_prev_seconds
-    FROM after_known
+           date_diff('second', COALESCE(prev_ts, ts), ts) AS gap_since_prev_seconds
+    FROM (
+        SELECT e.idx, e.start, m.ts, m.power_kw,
+               LAG(m.ts) OVER (PARTITION BY e.idx ORDER BY m.ts) AS prev_ts
+        FROM _context_events e
+        JOIN measurements m
+          ON m.turbine = e.turbine
+         AND m.ts >= e.start
+         AND m.ts <= e.start + INTERVAL 24 HOUR
+         AND m.power_kw IS NOT NULL
+    )
 ),
 first_stop AS (
     SELECT idx, MIN(ts) AS stop_ts
-    FROM after_known_gap
+    FROM after_known
     WHERE power_kw >= 50 OR gap_since_prev_seconds > 1800
     GROUP BY idx
 ),
 stop_detail AS (
-    -- The row that resolves the search: either the recovery reading, or the
-    -- first reading found past a 30-minute gap (in which case the *previous*
-    -- reading, prev_ts, is the last one we can still vouch for).
-    SELECT g.idx, g.start, g.ts, g.power_kw, g.prev_ts
-    FROM after_known_gap g
+    -- The row that resolves the search: either a gap (found past 30 minutes of
+    -- silence, in which case the *previous* reading, prev_ts, is the last one we
+    -- can still vouch for) or, only when there is no gap, the recovery reading.
+    -- A reading that itself follows a gap is never treated as a recovery, even
+    -- if its own power is >= 50 kW: gap_since_prev_seconds > 1800 always wins.
+    SELECT g.idx, g.start, g.ts, g.power_kw, g.prev_ts, g.gap_since_prev_seconds
+    FROM after_known g
     JOIN first_stop fs ON fs.idx = g.idx AND fs.stop_ts = g.ts
 ),
 last_known AS (
-    -- Used only when the search above found neither a recovery nor a gap: the
+    -- Used only when the search above found neither a gap nor a recovery: the
     -- last known reading in the 24-hour window, to check whether the data
     -- simply stops (for good) before reaching the 24-hour mark.
     SELECT idx, start, MAX(ts) AS last_ts
-    FROM after_known_gap
+    FROM after_known
     GROUP BY idx, start
 )
 SELECT
@@ -106,11 +110,12 @@ SELECT
     g.freq_max,
     g.volt_min,
     g.volt_max,
-    -- NULL unless a recovery was seen: 0 if the very first known reading (no
-    -- prev_ts) was already >= 50 kW (it did not drop, so there is no drop
-    -- duration to report), otherwise the exact seconds to the first known
-    -- reading >= 50 kW.
+    -- NULL unless a genuine recovery was seen (no gap first): 0 if the very
+    -- first known reading (no prev_ts) was already >= 50 kW (it did not drop,
+    -- so there is no drop duration to report), otherwise the exact seconds to
+    -- the first known reading >= 50 kW.
     CASE
+        WHEN sd.gap_since_prev_seconds > 1800 THEN NULL
         WHEN sd.power_kw >= 50 AND sd.prev_ts IS NULL THEN 0
         WHEN sd.power_kw >= 50 THEN date_diff('second', sd.start, sd.ts)
     END AS low_power_recovered_seconds,
@@ -120,8 +125,8 @@ SELECT
     -- NULL, with after_power present, means the readings stayed low and known
     -- (no gap) all the way to the 24-hour cap.
     CASE
-        WHEN sd.idx IS NOT NULL AND sd.power_kw < 50
-            THEN date_diff('second', sd.start, COALESCE(sd.prev_ts + INTERVAL 10 MINUTE, sd.start))
+        WHEN sd.idx IS NOT NULL AND sd.gap_since_prev_seconds > 1800
+            THEN date_diff('second', sd.start, sd.prev_ts + INTERVAL 10 MINUTE)
         WHEN sd.idx IS NULL AND lk.idx IS NOT NULL
              AND date_diff('second', lk.last_ts + INTERVAL 10 MINUTE, lk.start + INTERVAL 24 HOUR) > 1800
             THEN date_diff('second', lk.start, lk.last_ts + INTERVAL 10 MINUTE)

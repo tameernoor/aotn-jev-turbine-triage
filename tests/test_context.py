@@ -172,11 +172,11 @@ def test_power_never_drops_below_50kw_gives_zero_duration():
 
 def test_drop_and_recovery_duration_is_exact_not_a_floor():
     event = _event()
-    rows = [
-        _off(-10, power=600.0),
-        _off(10, power=0.0),
-        _off(370, power=60.0),  # recovers 6h10min after the start
-    ]
+    rows = [_off(-10, power=600.0)]
+    # Known, low readings every 20 minutes (no gap) from the start out to the
+    # recovery, so this is a genuine recovery, not a gap.
+    rows += [_off(m, power=0.0) for m in range(10, 370, 20)]
+    rows += [_off(370, power=60.0)]  # recovers 6h10min after the start
 
     lines = _lines(event, rows)
 
@@ -234,6 +234,40 @@ def test_drop_duration_skips_a_short_gap_when_looking_for_recovery():
     lines = _lines(event, rows)
 
     assert "power stayed below 50 kW for 30 min." in lines[1]
+
+
+def test_the_interval_to_the_first_known_reading_is_not_itself_a_gap():
+    """A first known reading arriving more than 30 minutes after the start must
+    not be mistaken for "the data stopping" at 0 minutes in: the start-to-first-
+    reading stretch is not a gap, however late that reading is."""
+    event = _event()
+    rows = [_off(40, power=10.0)]  # first known reading, 40 min after the start: < 50 kW
+    # No gap after it either: recovers cleanly 10 minutes later.
+    rows += [_off(50, power=100.0)]
+
+    lines = _lines(event, rows)
+
+    assert "power stayed below 50 kW for 50 min." in lines[0]
+    assert "at least" not in lines[0]
+    assert "no power data" not in lines[0]
+
+
+def test_a_reading_after_a_gap_is_never_a_recovery_even_if_its_own_power_is_high():
+    """A gap of more than 30 minutes resolves the search first: the reading that
+    ends the silence is never treated as a recovery (or "did not drop"), no
+    matter how high its own power is."""
+    event = _event()
+    rows = [
+        _off(0, power=0.0),  # first known reading: confirms the drop
+        # Nothing for 6 hours, then a healthy reading: still "then no power
+        # data", not a recovery at +6h.
+        _off(360, power=900.0),
+    ]
+
+    lines = _lines(event, rows)
+
+    assert "power stayed below 50 kW for at least 10 min, then no power data." in lines[0]
+    assert "900" not in lines[0]
 
 
 # --- rotor and grid -----------------------------------------------------------------
@@ -408,8 +442,10 @@ def test_full_render_matches_the_documented_example_shape():
         _off(-50, power=1500.0, wind=9.76),
         _off(-40, power=1540.0, wind=9.84),
         _off(10, power=0.0, rotor=0.0, freq=49.978, volt=690.0),
-        _off(370, power=60.0),  # recovers 6h10min after the start
     ]
+    # Known, low readings every 20 minutes (no gap) out to the recovery.
+    rows += [_off(m, power=0.0) for m in range(30, 370, 20)]
+    rows += [_off(370, power=60.0)]  # recovers 6h10min after the start
     events = [
         _event(start=event.start - timedelta(days=2), message="Frequency converter error"),
         _event(start=event.start - timedelta(minutes=5), status="Warning", message="Grid loss"),
