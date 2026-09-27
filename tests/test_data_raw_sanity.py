@@ -2,7 +2,8 @@
 
 data/raw/ is git-ignored and not part of a fresh checkout, so this whole file skips
 when it is absent. When present (after running scripts/fetch_kelmarsh.py), it checks
-the loader's totals against the facts docs/plan.md states about the real 2016 data.
+the loader's totals, and the checks described in README.md's "Triage rules" section,
+against the real 2016 data.
 """
 
 from collections import Counter

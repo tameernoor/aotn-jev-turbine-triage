@@ -2,7 +2,7 @@
 """Builds data/sample/ from data/raw/: three Status CSVs, Kelmarsh 1, 2 and 6,
 restricted to a hand-picked set of real 2016 time windows.
 
-The windows were chosen (see docs/plan.md Task 1) by inspecting the real data for
+The windows were chosen (see data/sample/README.md) by inspecting the real data for
 messages that start 3 or more times within 10 minutes on one turbine (chattering),
 Stops lasting over 24 hours (long stops), and a window where the whole farm crosses
 the "more than 10 non-informational events within 10 minutes" flood threshold. That

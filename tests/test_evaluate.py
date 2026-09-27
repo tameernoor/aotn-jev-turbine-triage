@@ -172,7 +172,7 @@ def test_agreements_are_not_listed_as_disagreements():
 # --- uncertain messages ---
 
 
-def test_uncertain_messages_are_counted_separately_from_accuracy():
+def test_uncertain_messages_evaluated_is_counted_separately_from_accuracy():
     events = [
         ev(status="Stop", message="Gearbox fault", iec_category="Forced outage"),
         ev(status="Stop", message="Cable unwind", iec_category="Scheduled Maintenance"),
@@ -185,5 +185,25 @@ def test_uncertain_messages_are_counted_separately_from_accuracy():
 
     result = evaluate(events, cache)
 
-    assert result["uncertain_messages"] == 1
+    assert result["uncertain_messages_evaluated"] == 1
     assert result["accuracy_by_message"] == {"correct": 2, "total": 2, "accuracy": 1.0}
+
+
+def test_uncertain_messages_asked_covers_every_pair_in_the_cache_not_only_scored_ones():
+    # "Cable unwind" is IEC-scored and confidently answered; "Unlogged noise" has no
+    # matching event at all (never scored) but is still a pair Jev was asked about, with
+    # a low-confidence cause; "Gearbox fault" is IEC-scored and itself uncertain.
+    events = [
+        ev(status="Stop", message="Cable unwind", iec_category="Scheduled Maintenance"),
+        ev(status="Stop", message="Gearbox fault", iec_category="Forced outage"),
+    ]
+    cache = cache_with(
+        ("Stop", "Cable unwind", cause_judgment("planned", confidence=1.0)),
+        ("Stop", "Gearbox fault", cause_judgment("fault", probabilities={"fault": 0.5, "planned": 0.5}, confidence=0.5)),
+        ("Stop", "Unlogged noise", cause_judgment("external", probabilities={"external": 0.4, "planned": 0.3}, confidence=0.4)),
+    )
+
+    result = evaluate(events, cache)
+
+    assert result["uncertain_messages_evaluated"] == 1  # only "Gearbox fault" is IEC-scored and uncertain
+    assert result["uncertain_messages_asked"] == 2  # "Gearbox fault" and "Unlogged noise" both

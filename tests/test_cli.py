@@ -1,3 +1,4 @@
+import hashlib
 import json
 from pathlib import Path
 
@@ -5,6 +6,7 @@ from fakes import FakeJev
 
 from jev_turbine.__main__ import DEFAULT_DATA_DIR, SAMPLE_DATA_DIR, _resolve_data_dir, main
 from jev_turbine.loader import load_events
+from jev_turbine.triage import QUESTIONS_PATH
 
 SAMPLE_DIR = Path(__file__).resolve().parent.parent / "data" / "sample"
 
@@ -36,9 +38,11 @@ def test_run_end_to_end_on_sample_writes_all_three_outputs(tmp_path, capsys):
     assert (out_dir / "judgments.json").exists()
     assert (out_dir / "triage.jsonl").exists()
     assert (out_dir / "evaluation.json").exists()
+    assert (out_dir / "summary.json").exists()
 
-    cache = json.loads((out_dir / "judgments.json").read_text(encoding="utf-8"))
-    assert cache  # at least one distinct non-informational pair was cached
+    payload = json.loads((out_dir / "judgments.json").read_text(encoding="utf-8"))
+    assert payload["questions_hash"] == hashlib.sha256(QUESTIONS_PATH.read_bytes()).hexdigest()
+    assert payload["cache"]  # at least one distinct non-informational pair was cached
 
     lines = (out_dir / "triage.jsonl").read_text(encoding="utf-8").splitlines()
     assert len(lines) == len(load_events(SAMPLE_DIR))
@@ -115,3 +119,86 @@ def test_run_on_a_custom_data_dir(tmp_path):
     main(["run", "--data", str(data_dir), "--out", str(out_dir)], ask=fake.ask)
 
     assert (out_dir / "triage.jsonl").exists()
+
+
+# --- out/summary.json ---
+
+
+def test_summary_json_holds_the_printed_fields_plus_the_model_ids_seen(tmp_path):
+    out_dir = tmp_path / "out"
+    fake = FakeJev(values=dict(cause="planned", safety_related=0.1))
+
+    main(["run", "--sample", "--out", str(out_dir)], ask=fake.ask)
+
+    summary = json.loads((out_dir / "summary.json").read_text(encoding="utf-8"))
+    assert set(summary) == {
+        "counts",
+        "top_act_now_messages",
+        "accuracy_by_event",
+        "accuracy_by_message",
+        "jev_calls",
+        "input_tokens",
+        "cost_usd",
+        "wall_seconds",
+        "model_ids",
+        "cache_ignored",
+    }
+    assert summary["jev_calls"] == len(fake.calls)
+    assert summary["model_ids"] == ["fake-jev"]
+    assert summary["cache_ignored"] is False
+
+
+# --- Jev() is built lazily, only on an actual cache miss ---
+
+
+def test_a_run_whose_cache_covers_every_pair_needs_no_key_and_builds_no_jev(tmp_path, monkeypatch):
+    out_dir = tmp_path / "out"
+    warm = FakeJev(values=dict(cause="planned", safety_related=0.1))
+    main(["run", "--sample", "--out", str(out_dir)], ask=warm.ask)
+    assert len(warm.calls) > 0
+
+    monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+    # ask=None: main must not build a real Jev() unless something is actually asked;
+    # the warmed cache above already covers every pair in the sample. This would raise
+    # (Jev() fails fast without a key) if construction were not lazy.
+    main(["run", "--sample", "--out", str(out_dir)])
+
+
+# --- cache guard: a stale questions_hash is ignored, not silently trusted ---
+
+
+def test_a_cache_with_a_stale_questions_hash_is_ignored_and_reported(tmp_path, capsys):
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    (out_dir / "judgments.json").write_text(
+        json.dumps({"questions_hash": "not-the-real-hash", "cache": {"Stop": {"whatever": {"cause": {"type": "choice", "value": "fault", "probabilities": {"fault": 1.0}, "confidence": 1.0}}}}}),
+        encoding="utf-8",
+    )
+    fake = FakeJev(values=dict(cause="planned", safety_related=0.1))
+
+    main(["run", "--sample", "--out", str(out_dir)], ask=fake.ask)
+
+    assert len(fake.calls) > 0  # the stale cache was not used, so pairs were asked fresh
+    captured = capsys.readouterr()
+    assert "ignored" in captured.out.lower()
+    summary = json.loads((out_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["cache_ignored"] is True
+
+
+# --- --cache FILE seeds the run from an existing cache without ever writing to it ---
+
+
+def test_cache_flag_seeds_from_a_file_without_writing_back_to_it(tmp_path):
+    out_dir = tmp_path / "out"
+    warm_dir = tmp_path / "warm"
+    warm = FakeJev(values=dict(cause="planned", safety_related=0.1))
+    main(["run", "--sample", "--out", str(warm_dir)], ask=warm.ask)
+    seed_path = warm_dir / "judgments.json"
+    seed_before = seed_path.read_text(encoding="utf-8")
+
+    second = FakeJev(values=dict(cause="planned", safety_related=0.1))
+    main(["run", "--sample", "--out", str(out_dir), "--cache", str(seed_path)], ask=second.ask)
+
+    assert len(second.calls) == 0  # every pair was already in the seed file
+    assert (out_dir / "judgments.json").exists()
+    assert seed_path.read_text(encoding="utf-8") == seed_before  # the seed file itself is untouched

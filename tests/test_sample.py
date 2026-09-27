@@ -1,4 +1,4 @@
-"""Checks the committed data/sample/ has the properties docs/plan.md Task 1 asks for."""
+"""Checks the committed data/sample/ has the properties data/sample/README.md describes."""
 
 from pathlib import Path
 

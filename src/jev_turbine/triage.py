@@ -1,6 +1,6 @@
 """Triage the event stream: Jev answers three questions per distinct (status, message)
 pair, plain code decides act_now / monitor / no_action from the cached judgments plus
-the code checks in checks.py. See docs/plan.md's "Questions" and "Rules" sections.
+the code checks in checks.py. See README.md's "Questions" and "Triage rules" sections.
 """
 
 from __future__ import annotations

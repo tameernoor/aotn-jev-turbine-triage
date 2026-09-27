@@ -1,23 +1,37 @@
 """CLI entry point.
 
     uv run --env-file .env python -m jev_turbine run [--data DIR] [--out DIR] [--sample]
+                                                       [--cache FILE]
 
 Loads every Status CSV in --data (default data/raw), triages each event against Jev's
 judgments, and writes out/judgments.json (a cache of Jev's answers per distinct
 (status, message) pair, persisted and reused between runs so a pair already asked is
-never asked again), out/triage.jsonl (one line per event) and out/evaluation.json (see
-evaluate.py), then prints a short summary. `--sample` points --data at the committed
-data/sample/ folder instead, for readers without the full Zenodo download.
+never asked again), out/triage.jsonl (one line per event), out/evaluation.json (see
+evaluate.py) and out/summary.json (the printed summary below, as JSON), then prints
+that summary. `--sample` points --data at the committed data/sample/ folder instead,
+for readers without the full Zenodo download. `--cache FILE` seeds the run from an
+existing judgments cache (for example results/judgments-2016.json) instead of
+out/judgments.json, without ever writing back to FILE itself; the merged result
+(FILE's answers plus anything newly asked) is still written to out/judgments.json as
+usual.
 
-Needs TYPESAFE_API_KEY in the environment for a real run; nothing here reads .env
-itself (`uv run --env-file .env` does that). Tests pass a fake `ask` straight to
-`main()`/`run()` instead, so the test suite never needs a key or a network call.
+The cache file also stores a hash of questions/event.yaml. If that hash does not match
+the questions file this run is using, the cache is not trusted and is ignored instead
+of silently serving answers to questions that have since changed wording; the run says
+so, both on stdout and in out/summary.json.
+
+Needs TYPESAFE_API_KEY in the environment for a real run, and only once a question is
+actually asked: the real Jev() client is built lazily, on the first cache miss, so a
+run whose cache already covers every pair needs no key and makes no network call at
+all. Nothing here reads .env itself (`uv run --env-file .env` does that). Tests pass a
+fake `ask` straight to `main()`/`run()` instead, so the test suite never needs a key.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import time
 from collections import Counter
@@ -25,9 +39,9 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from .evaluate import evaluate
-from .jev import AskFn, Jev
+from .jev import AskFn, Jev, JevResult
 from .loader import load_events
-from .triage import ACT_NOW, Cache, TriageResult, triage
+from .triage import ACT_NOW, QUESTIONS_PATH, Cache, TriageResult, triage
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DATA_DIR = REPO_ROOT / "data" / "raw"
@@ -39,16 +53,35 @@ TOP_ACT_NOW_MESSAGES = 5
 
 class _UsageTracker:
     """Wraps an AskFn and records every JevResult.meta, so the summary can report Jev
-    calls, tokens and cost without changing triage.py's signature."""
+    calls, tokens, cost and the model ids seen, without changing triage.py's
+    signature."""
 
     def __init__(self, ask: AskFn):
         self._ask = ask
         self.calls: list[dict] = []
 
-    async def __call__(self, state: dict, questions: dict[str, dict]):
+    async def __call__(self, state: dict, questions: dict[str, dict]) -> JevResult:
         result = await self._ask(state, questions)
         self.calls.append(result.meta)
         return result
+
+
+class _LazyJev:
+    """Stands in for a real Jev() until the first pair actually needs asking. A run
+    whose cache already covers every distinct pair never calls this, so it never
+    builds a client and never needs TYPESAFE_API_KEY."""
+
+    def __init__(self):
+        self._jev: Jev | None = None
+
+    async def __call__(self, state: dict, questions: dict[str, dict]) -> JevResult:
+        if self._jev is None:
+            self._jev = Jev()
+        return await self._jev.ask(state, questions)
+
+    async def aclose(self) -> None:
+        if self._jev is not None:
+            await self._jev.aclose()
 
 
 def _resolve_data_dir(data_arg: str | None, sample: bool) -> Path:
@@ -57,14 +90,26 @@ def _resolve_data_dir(data_arg: str | None, sample: bool) -> Path:
     return SAMPLE_DATA_DIR if sample else DEFAULT_DATA_DIR
 
 
-def _load_cache(path: Path) -> Cache:
-    if path.exists():
-        return json.loads(path.read_text(encoding="utf-8"))
-    return {}
+def _questions_hash() -> str:
+    return hashlib.sha256(QUESTIONS_PATH.read_bytes()).hexdigest()
+
+
+def _load_cache(path: Path) -> tuple[Cache, bool]:
+    """Returns (cache, ignored). `ignored` is True only when `path` existed but its
+    stored questions_hash did not match questions/event.yaml's current hash (or the
+    file predates that field), so its answers were not trusted or used. A `path` that
+    does not exist at all is just an empty starting cache, not an ignored one."""
+    if not path.exists():
+        return {}, False
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("questions_hash") != _questions_hash():
+        return {}, True
+    return payload.get("cache", {}), False
 
 
 def _save_cache(path: Path, cache: Cache) -> None:
-    path.write_text(json.dumps(cache, indent=2, ensure_ascii=False), encoding="utf-8")
+    payload = {"questions_hash": _questions_hash(), "cache": cache}
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def _triage_row(result: TriageResult) -> dict:
@@ -88,9 +133,16 @@ def _write_triage_jsonl(path: Path, results: Sequence[TriageResult]) -> None:
             f.write(json.dumps(_triage_row(result), ensure_ascii=False) + "\n")
 
 
-def _summarise(results: Sequence[TriageResult], evaluation: dict, usage_calls: list[dict], wall_seconds: float) -> dict:
+def _summarise(
+    results: Sequence[TriageResult],
+    evaluation: dict,
+    usage_calls: list[dict],
+    wall_seconds: float,
+    cache_ignored: bool,
+) -> dict:
     counts = Counter(r.triage for r in results)
     act_now_messages = Counter(r.message for r in results if r.triage == ACT_NOW)
+    model_ids = sorted({c["model"] for c in usage_calls if c.get("model")})
     return {
         "counts": dict(counts),
         "top_act_now_messages": act_now_messages.most_common(TOP_ACT_NOW_MESSAGES),
@@ -100,6 +152,8 @@ def _summarise(results: Sequence[TriageResult], evaluation: dict, usage_calls: l
         "input_tokens": sum(c["input_tokens"] for c in usage_calls),
         "cost_usd": sum(c["cost_usd"] for c in usage_calls),
         "wall_seconds": wall_seconds,
+        "model_ids": model_ids,
+        "cache_ignored": cache_ignored,
     }
 
 
@@ -110,7 +164,13 @@ def _fmt_accuracy(acc: dict) -> str:
 
 
 def _format_summary(summary: dict) -> str:
-    lines = ["Triage counts:"]
+    lines = []
+    if summary["cache_ignored"]:
+        lines.append(
+            "Cache ignored: questions/event.yaml does not match the hash stored with "
+            "the cache, so every pair was asked fresh."
+        )
+    lines.append("Triage counts:")
     for cls in ("act_now", "monitor", "no_action"):
         lines.append(f"  {cls}: {summary['counts'].get(cls, 0)}")
 
@@ -130,24 +190,35 @@ def _format_summary(summary: dict) -> str:
         f"Jev calls: {summary['jev_calls']}, input tokens: {summary['input_tokens']}, "
         f"cost: ${summary['cost_usd']:.6f}, wall time: {summary['wall_seconds']:.2f}s"
     )
+    if summary["model_ids"]:
+        lines.append(f"Model(s): {', '.join(summary['model_ids'])}")
     return "\n".join(lines)
 
 
-async def run(data_dir: Path, out_dir: Path, ask: AskFn | None = None) -> dict:
+async def run(
+    data_dir: Path,
+    out_dir: Path,
+    ask: AskFn | None = None,
+    seed_cache: Path | None = None,
+) -> dict:
     """Run the full pipeline once: load, triage (asking Jev only for pairs not already
-    in out/judgments.json), write the three output files, print and return the
-    summary. If `ask` is None, builds a real Jev() (needs TYPESAFE_API_KEY) and closes
-    it afterwards; a test passes a fake ask instead."""
-    jev: Jev | None = None
+    in the cache), write the output files, print and return the summary. If `ask` is
+    None, a real Jev() is built the first time a pair is actually asked (needs
+    TYPESAFE_API_KEY); a test passes a fake ask instead, or relies on a cache that
+    already covers every pair so no Jev is ever built. `seed_cache`, if given, is read
+    instead of out_dir/judgments.json as the starting cache; the merged result is
+    still written to out_dir/judgments.json, never back to `seed_cache`."""
+    lazy_jev: _LazyJev | None = None
     if ask is None:
-        jev = Jev()
-        ask = jev.ask
+        lazy_jev = _LazyJev()
+        ask = lazy_jev
     tracker = _UsageTracker(ask)
     try:
         events = load_events(data_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         cache_path = out_dir / "judgments.json"
-        cache = _load_cache(cache_path)
+        load_path = seed_cache if seed_cache is not None else cache_path
+        cache, cache_ignored = _load_cache(load_path)
 
         started = time.perf_counter()
         results = await triage(events, tracker, cache)
@@ -161,12 +232,16 @@ async def run(data_dir: Path, out_dir: Path, ask: AskFn | None = None) -> dict:
             json.dumps(evaluation, indent=2, ensure_ascii=False), encoding="utf-8"
         )
 
-        summary = _summarise(results, evaluation, tracker.calls, wall_seconds)
+        summary = _summarise(results, evaluation, tracker.calls, wall_seconds, cache_ignored)
+        (out_dir / "summary.json").write_text(
+            json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+
         print(_format_summary(summary))
         return summary
     finally:
-        if jev is not None:
-            await jev.aclose()
+        if lazy_jev is not None:
+            await lazy_jev.aclose()
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -177,6 +252,7 @@ def _build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--data", metavar="DIR", default=None, help=f"folder of Status CSVs (default: {DEFAULT_DATA_DIR})")
     run_parser.add_argument("--out", metavar="DIR", default=None, help=f"output folder (default: {DEFAULT_OUT_DIR})")
     run_parser.add_argument("--sample", action="store_true", help="use the committed data/sample/ folder instead of --data")
+    run_parser.add_argument("--cache", metavar="FILE", default=None, help="seed the judgments cache from FILE instead of out/judgments.json")
 
     return parser
 
@@ -186,7 +262,8 @@ def main(argv: Sequence[str] | None = None, ask: AskFn | None = None) -> None:
     if args.command == "run":
         data_dir = _resolve_data_dir(args.data, args.sample)
         out_dir = Path(args.out) if args.out is not None else DEFAULT_OUT_DIR
-        asyncio.run(run(data_dir, out_dir, ask=ask))
+        seed_cache = Path(args.cache) if args.cache is not None else None
+        asyncio.run(run(data_dir, out_dir, ask=ask, seed_cache=seed_cache))
 
 
 if __name__ == "__main__":

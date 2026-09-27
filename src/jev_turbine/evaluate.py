@@ -109,8 +109,14 @@ def evaluate(events: Sequence[Event], cache: Cache) -> dict:
         if expected != got
     ]
 
-    uncertain_messages = sum(
+    uncertain_messages_evaluated = sum(
         1 for key in message_results if cause_by_pair[key].get("confidence", 1.0) < CHOICE_MIN_CONFIDENCE
+    )
+    uncertain_messages_asked = sum(
+        1
+        for messages in cache.values()
+        for raw in messages.values()
+        if raw.get("cause", {}).get("confidence", 1.0) < CHOICE_MIN_CONFIDENCE
     )
 
     return {
@@ -130,5 +136,10 @@ def evaluate(events: Sequence[Event], cache: Cache) -> dict:
         },
         "confusion_matrix": {expected: dict(got_counts) for expected, got_counts in confusion.items()},
         "disagreements": disagreements,
-        "uncertain_messages": uncertain_messages,
+        # ...evaluated: distinct messages IEC-scored above with a low-confidence cause read.
+        # ...asked: the same count over every distinct pair in `cache`, scored or not, so it
+        # also covers messages with no IEC category at all (e.g. most of the 98 distinct
+        # pairs in a full 2016 run, only 61 of which carry a category).
+        "uncertain_messages_evaluated": uncertain_messages_evaluated,
+        "uncertain_messages_asked": uncertain_messages_asked,
     }
