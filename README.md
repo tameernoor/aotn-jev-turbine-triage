@@ -1,6 +1,14 @@
 # jev-turbine-triage
 
-A small companion example for the aotn series. It reads real wind turbine event logs
+**Part of aotn**, a series of small educational example projects that go with the article "The classifier you don't have to train", about TypeSafe's Jev. Each project gives Jev a different kind of text, asks it narrow typed questions, and lets plain code make every decision. Each one then measures itself against an answer key it did not tune on, and says where it falls short.
+
+The code is here to learn from, not to run in production. Each project shows one pattern in a form small enough to read in one sitting. The rules are illustrative, and none of it is tax, engineering or political advice.
+
+- [aotn-jev-invoices](https://github.com/tameernoor/aotn-jev-invoices): receipts and supplier invoices, VAT codes and approval
+- [aotn-jev-turbine-triage](https://github.com/tameernoor/aotn-jev-turbine-triage): a year of real wind turbine alarms, triaged and checked against the operator's own labels
+- [aotn-jev-stortinget](https://github.com/tameernoor/aotn-jev-stortinget): did the minister answer the question? A full session of the Norwegian parliament
+
+This project reads real wind turbine event logs
 from the Kelmarsh wind farm, asks Jev five literal yes/no questions about each kind of
 event, and lets plain code sort the stream into act now, monitor, or no action. It also
 scores Jev honestly against the wind farm operator's own fault category for each event,
